@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import { qdrantClient, COLLECTION_NAME, setupQdrantCollection } from '../config/qdrant.js';
@@ -10,6 +9,7 @@ import pdfParse from 'pdf-parse-new';
 
 const PDF_DIR = path.join(process.cwd(), 'data', 'pdfs');
 const BATCH_SIZE = 25; // Tamanho do lote para upsert no Qdrant
+const EMBEDDING_CONCURRENCY = 1; // Quantidade de embeddings gerados simultaneamente no Ollama
 
 export async function processPdfs() {
   await setupQdrantCollection();
@@ -40,29 +40,34 @@ export async function processPdfs() {
     
     const points = [];
 
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      
-      // Embedding via Ollama (bge-m3)
-      const vector = await generateEmbedding(chunk.content);
+    // Processa os chunks em sequencial conforme EMBEDDING_CONCURRENCY
+    for (let i = 0; i < chunks.length; i += EMBEDDING_CONCURRENCY) {
+      const batchChunks = chunks.slice(i, i + EMBEDDING_CONCURRENCY);
 
-      points.push({
-        id: uuidv4(),
-        vector,
-        payload: {
-          content: chunk.content,
-          artigo: chunk.metadata.artigo,
-          livro: chunk.metadata.livro ?? null,
-          titulo: chunk.metadata.titulo ?? null,
-          capitulo: chunk.metadata.capitulo ?? null,
-          secao: chunk.metadata.secao ?? null,
-          tipo_documento: chunk.metadata.tipo_documento,
-          esfera: chunk.metadata.esfera,
-          fonte_pdf: chunk.metadata.fonte_pdf,
-        },
-      });
+      const batchPoints = await Promise.all(
+        batchChunks.map(async (chunk) => {
+          const vector = await generateEmbedding(chunk.content);
 
-      process.stdout.write(`  Embeddings: ${i + 1}/${chunks.length}\r`);
+          return {
+            id: uuidv4(),
+            vector,
+            payload: {
+              content: chunk.content,
+              artigo: chunk.metadata.artigo,
+              livro: chunk.metadata.livro || undefined,
+              titulo: chunk.metadata.titulo || undefined,
+              capitulo: chunk.metadata.capitulo || undefined,
+              secao: chunk.metadata.secao || undefined,
+              tipo_documento: chunk.metadata.tipo_documento,
+              esfera: chunk.metadata.esfera,
+              fonte_pdf: chunk.metadata.fonte_pdf,
+            },
+          };
+        })
+      );
+
+      points.push(...batchPoints);
+      process.stdout.write(`  Embeddings: ${points.length}/${chunks.length}\r`);
     }
 
     console.log('\n- Inserindo lotes no Qdrant...');
