@@ -1,15 +1,11 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
 
-// Instância do cliente do Qdrant (ajusta a URL se o Docker estiver noutra porta/host)
 export const qdrantClient = new QdrantClient({
-  url: process.env.QDRANT_URL || 'http://localhost:6333',
+  url: 'http://localhost:6333',
 });
 
 export const COLLECTION_NAME = 'legislacao_visa';
 
-/**
- * Garante que a coleção existe no Qdrant com as configurações corretas para o bge-m3
- */
 export async function setupQdrantCollection() {
   try {
     const collections = await qdrantClient.getCollections();
@@ -25,9 +21,9 @@ export async function setupQdrantCollection() {
           distance: 'Cosine',
         },
       });
-      console.log(`✅ Coleção '${COLLECTION_NAME}' criada com sucesso.`);
+      console.log(`Coleção '${COLLECTION_NAME}' criada com sucesso.`);
     } else {
-      console.log(`ℹ️ Coleção '${COLLECTION_NAME}' já existe.`);
+      console.log(`Coleção '${COLLECTION_NAME}' já existe.`);
     }
   } catch (error) {
     console.error('❌ Erro ao configurar coleção no Qdrant:', error);
