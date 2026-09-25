@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import OpenAI from 'openai';
 import { searchLegislacao } from '../retriever/search.js';
+import { normalizeQuery } from './normalizer.js';
 
 const apiKey = process.env.GROQ_API_KEY;
 
@@ -26,22 +27,26 @@ export async function askRAG(
   question: string,
   onChunk?: (chunk: string) => void
 ) {
-  // 1. Retrieval local (Qdrant)
-  const contextHits = await searchLegislacao(question, { limit: 3, scoreThreshold: 0.35 });
+  const normalizedQuestion = await normalizeQuery(question);
+
+  const contextHits = await searchLegislacao(normalizedQuestion, { 
+    limit: 3, 
+    scoreThreshold: 0.35 
+  });
 
   if (contextHits.length === 0) {
     return {
       answer: "Não foram encontrados artigos relevantes na base de dados para responder a esta questão.",
+      normalizedQuery: normalizedQuestion,
       sources: []
     };
   }
 
-  // 2. Augment Context
   const contextText = contextHits
     .map((hit, index) => `--- Trecho [${index + 1}] (${hit.artigo}) ---\n${hit.content}`)
     .join('\n\n');
 
-  const userPrompt = `Contexto Legislativo:\n${contextText}\n\nPergunta do Fiscal: ${question}`;
+  const userPrompt = `Contexto Legislativo:\n${contextText}\n\nPergunta do Fiscal/Munícipe: ${question}`;
 
   const responseStream = await groqClient.chat.completions.create({
     model: 'qwen/qwen3.8-27b',
@@ -68,6 +73,7 @@ export async function askRAG(
 
   return {
     answer: fullAnswer,
+    normalizedQuery: normalizedQuestion,
     sources: contextHits.map((h) => ({ artigo: h.artigo, score: h.score, fonte: h.fonte_pdf })),
   };
 }
