@@ -1,5 +1,17 @@
-import { ollamaClient } from '../config/ollama.js';
+import 'dotenv/config';
+import OpenAI from 'openai';
 import { searchLegislacao } from '../retriever/search.js';
+
+const apiKey = process.env.GROQ_API_KEY;
+
+if (!apiKey) {
+  throw new Error('A chave GROQ_API_KEY não foi encontrada no arquivo .env');
+}
+
+const groqClient = new OpenAI({
+  baseURL: 'https://api.groq.com/openai/v1',
+  apiKey: apiKey,
+});
 
 const SYSTEM_PROMPT = `Você é um assistente especializado e rigoroso em Vigilância Sanitária (VISA).
 Sua tarefa é responder a dúvidas de fiscais e munícipes com base EXCLUSIVAMENTE nos trechos da legislação fornecidos no contexto.
@@ -14,8 +26,8 @@ export async function askRAG(
   question: string,
   onChunk?: (chunk: string) => void
 ) {
-  // 1. Retrieval
-  const contextHits = await searchLegislacao(question, { limit: 4, scoreThreshold: 0.35 });
+  // 1. Retrieval local (Qdrant)
+  const contextHits = await searchLegislacao(question, { limit: 3, scoreThreshold: 0.35 });
 
   if (contextHits.length === 0) {
     return {
@@ -31,24 +43,26 @@ export async function askRAG(
 
   const userPrompt = `Contexto Legislativo:\n${contextText}\n\nPergunta do Fiscal: ${question}`;
 
-  // 3. Streaming Response via Ollama (Qwen2.5 3B)
-  const responseStream = await ollamaClient.generate({
-    model: 'qwen2.5:3b',
-    system: SYSTEM_PROMPT,
-    prompt: userPrompt,
+  const responseStream = await groqClient.chat.completions.create({
+    model: 'qwen/qwen3.8-27b',
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: userPrompt },
+    ],
+    temperature: 0.1,
+    max_tokens: 300,
     stream: true,
-    options: {
-      temperature: 0.1,
-      num_predict: 400,
-    },
   });
 
   let fullAnswer = '';
 
-  for await (const part of responseStream) {
-    fullAnswer += part.response;
-    if (onChunk) {
-      onChunk(part.response);
+  for await (const chunk of responseStream) {
+    const text = chunk.choices[0]?.delta?.content || '';
+    if (text) {
+      fullAnswer += text;
+      if (onChunk) {
+        onChunk(text);
+      }
     }
   }
 
