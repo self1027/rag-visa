@@ -13,15 +13,7 @@ const groqClient = new OpenAI({
 });
 
 const NORMALIZER_SYSTEM_PROMPT = `Você é um especialista em terminologia de Vigilância Sanitária (VISA).
-Sua tarefa é REESCREVER e ENRIQUECER perguntas informais de usuários, transformando-as em uma consulta altamente técnica utilizando o vocabulário oficial da legislação sanitária (ex: Código Sanitário Estadual, RDC Anvisa).
-
-Instruções Estritas:
-1. Identifique o tema principal e substitua termos leigos por conceitos legais/sanitários:
-   - "depósito de alimentos" -> "entreposto de gêneros alimentícios, armazém, área de armazenamento de alimentos"
-   - "parede impermeável" -> "paredes e superfícies lisas, resistentes, laváveis e impermeáveis, revestimento"
-   - "comida em casa" -> "produção artesanal/domiciliar, boas práticas de fabricação"
-2. Retorne APENAS a pergunta reescrita em uma única frase técnica direta, sem introduções ou explicações.
-3. Não use aspas ou prefixos na resposta.`;
+Sua tarefa é REESCREVER e ENRIQUECER perguntas informais de usuários, transformando-as em uma consulta altamente técnica utilizando o vocabulário oficial da legislação sanitária (ex: Código Sanitário Estadual, RDC Anvisa).`;
 
 export async function normalizeQuery(userQuestion: string): Promise<string> {
   try {

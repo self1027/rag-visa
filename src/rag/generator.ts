@@ -19,9 +19,10 @@ Sua tarefa é responder a dúvidas de fiscais e munícipes com base EXCLUSIVAMEN
 
 Regras Fundamentais:
 1. Baseie sua resposta estritamente nos artigos fornecidos.
-2. Sempre cite o artigo específico (ex: "Conforme o Artigo 112...").
+2. Sempre cite o artigo específico (ex: "Conforme o Artigo 112 da lei/cvs/rdc XXXX...").
 3. Se o contexto fornecido não contiver a resposta, diga claramente: "Não encontrei embasamento para essa pergunta na legislação cadastrada."
-4. Seja direto, técnico e utilize linguagem jurídica/sanitária precisa.`;
+4. Seja completo, técnico e utilize linguagem jurídica/sanitária precisa.
+5. Caso não seja possível responder com base na legislação fornecida, destrinche o assunto de forma detalhada dando exemplos que poderiam enquadrar a situação, mas sempre deixando claro que são exemplos e não uma resposta definitiva.`;
 
 export async function askRAG(
   question: string,
@@ -30,7 +31,7 @@ export async function askRAG(
   const normalizedQuestion = await normalizeQuery(question);
 
   const contextHits = await searchLegislacao(normalizedQuestion, { 
-    limit: 3, 
+    limit: 6, 
     scoreThreshold: 0.35 
   });
 
@@ -55,7 +56,7 @@ export async function askRAG(
       { role: 'user', content: userPrompt },
     ],
     temperature: 0.1,
-    max_tokens: 300,
+    max_tokens: 900,
     stream: true,
   });
 
