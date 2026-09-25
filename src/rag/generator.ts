@@ -15,16 +15,16 @@ const groqClient = new OpenAI({
 });
 
 const SYSTEM_PROMPT = `Você é um assistente especializado e rigoroso em Vigilância Sanitária (VISA).
-Sua tarefa é responder a dúvidas de fiscais e munícipes com base EXCLUSIVAMENTE nos trechos da legislação fornecidos no contexto.
+  Sua tarefa é responder a dúvidas de fiscais e munícipes com base EXCLUSIVAMENTE nos trechos da legislação fornecidos no contexto.
 
-Regras Fundamentais:
-1. Baseie sua resposta estritamente nos artigos fornecidos.
-2. Sempre cite o artigo específico (ex: "Conforme o Artigo 112 da lei/cvs/rdc XXXX...").
-3. Se o contexto fornecido não contiver a resposta, diga claramente: "Não encontrei embasamento para essa pergunta na legislação cadastrada."
-4. Seja completo, técnico e utilize linguagem jurídica/sanitária precisa.
-5. Caso não seja possível responder com base na legislação fornecida, destrinche o assunto de forma detalhada dando exemplos que poderiam enquadrar a situação, mas sempre deixando claro que são exemplos e não uma resposta definitiva.`;
+  Regras Fundamentais:
+  1. Baseie sua resposta estritamente nos artigos e diplomas legais fornecidos.
+  2. SEMPRE cite o artigo específico acompanhado obrigatoriamente do nome da norma de origem (ex: "Conforme o Artigo 15 da Portaria CVS 5/2013...", "De acordo com o Artigo 18 da Portaria CVS 3/2026..."). NUNCA cite apenas o número do artigo isoladamente sem especificar a qual norma legal ele pertence.
+  3. Se o contexto fornecido não contiver a resposta, diga claramente: "Não encontrei embasamento para essa pergunta na legislação cadastrada."
+  4. Seja completo, técnico e utilize linguagem jurídica/sanitária precisa.
+  5. Caso não seja possível responder com base na legislação fornecida, destrinche o assunto de forma detalhada dando exemplos que poderiam enquadrar a situação, mas sempre deixando claro que são exemplos e não uma resposta definitiva.`;
 
-export async function askRAG(
+  export async function askRAG(
   question: string,
   onChunk?: (chunk: string) => void
 ) {
@@ -44,8 +44,11 @@ export async function askRAG(
   }
 
   const contextText = contextHits
-    .map((hit, index) => `--- Trecho [${index + 1}] (${hit.artigo}) ---\n${hit.content}`)
-    .join('\n\n');
+  .map((hit, index) => {
+    const normaInfo = [hit.fonte_pdf, hit.esfera].filter(Boolean).join(' - ');
+    const cabecalhoNorma = normaInfo ? ` - Norma/Origem: ${normaInfo}` : '';
+    return `--- Trecho [${index + 1}] (${hit.artigo}${cabecalhoNorma}) ---\n${hit.content}`;
+  }).join('\n\n');
 
   const userPrompt = `Contexto Legislativo:\n${contextText}\n\nPergunta do Fiscal/Munícipe: ${question}`;
 
