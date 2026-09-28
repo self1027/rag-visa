@@ -4,10 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "chat": "tsx src/chat-cli.ts",
     "ingest": "tsx src/ingestion/ingest.ts",
-    "test:db": "tsx src/test-db.ts",
-    "ask": "tsx src/cli.ts"
+    "test:db": "tsx src/test-db.ts"
   },
   "keywords": [],
   "author": "",
