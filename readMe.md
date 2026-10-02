@@ -25,10 +25,9 @@ O projeto foi construído utilizando uma stack moderna em TypeScript:
     ```
 
 3. **Qdrant** rodando (via Docker ou nativo) na porta `6333`:
-```bash
-docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
-
-```
+    ```bash
+    docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
+    ```
 
 
 4. Uma chave de API da **Groq** configurada no arquivo `.env`.
