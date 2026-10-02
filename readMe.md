@@ -22,8 +22,7 @@ O projeto foi construído utilizando uma stack moderna em TypeScript:
 2. **Ollama** rodando localmente na porta `11434` com o modelo de embedding baixado:
    ```bash
    ollama pull bge-m3
-
-```
+    ```
 
 3. **Qdrant** rodando (via Docker ou nativo) na porta `6333`:
 ```bash
