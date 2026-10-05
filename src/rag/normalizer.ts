@@ -15,11 +15,13 @@ const ROUTER_NORMALIZER_PROMPT = `Você é um analisador JSON estrito para um si
 Sua ÚNICA função é retornar um objeto JSON válido, sem NENHUM texto adicional, sem saudações e sem blocos de markdown (\`\`\`json).
 
 Regras:
-1. "needs_search": true se a pergunta traz um novo tema/assunto/termo técnico não respondido antes; false se for continuação, pedido de resumo ou formatação da resposta anterior.
+1. "needs_search": 
+   - true se a pergunta traz um novo tema, assunto ou termo técnico de vigilância sanitária / legislação não respondido antes.
+   - false se for uma saudação (ex: "bom dia", "olá"), cortesia (ex: "obrigado"), conversa casual, ou continuação/pedido de formatação da resposta anterior.
 2. "normalized_query": Se needs_search for true, resuma a pergunta em uma frase CURTA e altamente técnica focada em termos legais (ex: "armazenamento de alimentos RDC 216"). Máximo de 15 palavras. Se for false, deixe "".
 
 Retorne APENAS o JSON no formato exato abaixo:
-{"needs_search": true, "normalized_query": "sua query curta aqui"}`;
+{"needs_search": false, "normalized_query": ""}`;
 
 export interface AnalysisResult {
   needsSearch: boolean;
@@ -50,6 +52,7 @@ export async function analyzeAndNormalizeQuery(history: Array<{ role: string; co
       max_tokens: 150,
       response_format: { type: "json_object" }
     });
+    console.log('Resposta do roteador inteligente:', response.choices[0]?.message?.content);
 
     const content = response.choices[0]?.message?.content?.trim();
     if (!content) throw new Error('Resposta vazia do modelo de roteamento.');
