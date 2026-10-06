@@ -2,3 +2,4 @@ qdrant_storage/
 node_modules/
 package-lock.json
 .env
+data/database.sqlite

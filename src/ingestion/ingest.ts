@@ -6,35 +6,25 @@ import { qdrantClient, COLLECTION_NAME, setupQdrantCollection } from '../config/
 import { generateEmbedding } from '../config/ollama.js';
 import { chunkLegislacao } from '../utils/chunker.js';
 import pdfParse from 'pdf-parse-new';
+import { db } from '../db/index.js';
+import { documentsTable } from '../db/schema.js';
+import { eq } from 'drizzle-orm';
 
 const PDF_DIR = path.join(process.cwd(), 'data', 'pdfs');
-const MANIFEST_PATH = path.join(process.cwd(), 'data', 'manifest.json');
 const BATCH_SIZE = 25;
 const EMBEDDING_CONCURRENCY = 1;
 
-function loadManifest(): Record<string, any> {
-  if (fs.existsSync(MANIFEST_PATH)) {
-    try {
-      const rawData = fs.readFileSync(MANIFEST_PATH, 'utf-8');
-      return JSON.parse(rawData);
-    } catch (error) {
-      console.error('Erro ao ler o arquivo manifest.json:', error);
-    }
-  } else {
-    console.warn('Arquivo manifest.json nao encontrado em data/. Os metadados cairao nos fallbacks padrao.');
-  }
-  return {};
-}
-
 export async function processPdfs() {
-  
   await setupQdrantCollection();
 
   if (!fs.existsSync(PDF_DIR)) {
     fs.mkdirSync(PDF_DIR, { recursive: true });
   }
 
-  const manifest = loadManifest();
+  // Busca todos os documentos cadastrados no SQLite
+  const dbDocuments = db.select().from(documentsTable).all();
+  const metadataMap = new Map(dbDocuments.map(doc => [doc.filename, doc]));
+
   const files = fs.readdirSync(PDF_DIR).filter((file) => file.endsWith('.pdf'));
 
   if (files.length === 0) {
@@ -47,12 +37,13 @@ export async function processPdfs() {
   for (const file of files) {
     console.log(`\nProcessando arquivo: ${file}`);
     
-    const fileMetadata = manifest[file] || {};
-    const esfera = fileMetadata.esfera || 'municipal';
-    const tipoDocumento = fileMetadata.tipo || 'legislacao';
-    const tituloAmigavel = fileMetadata.titulo || file;
+    // Procura os metadados no mapa carregado do SQLite (com fallbacks se não cadastrado)
+    const fileMetadata = metadataMap.get(file);
+    const esfera = fileMetadata?.esfera || 'municipal';
+    const tipoDocumento = fileMetadata?.tipo || 'legislacao';
+    const tituloAmigavel = fileMetadata?.titulo || file;
 
-    console.log(`- Metadados do manifesto -> Esfera: ${esfera} | Tipo: ${tipoDocumento} | Titulo: ${tituloAmigavel}`);
+    console.log(`- Metadados do Banco -> Esfera: ${esfera} | Tipo: ${tipoDocumento} | Titulo: ${tituloAmigavel}`);
 
     const filePath = path.join(PDF_DIR, file);
     const dataBuffer = fs.readFileSync(filePath);
@@ -125,9 +116,9 @@ export async function processPdfs() {
   console.log('----------------------------------------');
   summaryReport.forEach((item, idx) => {
     console.log(`${idx + 1}. Arquivo: ${item.file}`);
-    console.log(`   - Esfera mapeada: ${item.esfera}`);
-    console.log(`   - Tipo: ${item.tipo}`);
-    console.log(`   - Chunks gerados: ${item.chunksCount}`);
+    console.log(`    - Esfera mapeada: ${item.esfera}`);
+    console.log(`    - Tipo: ${item.tipo}`);
+    console.log(`    - Chunks gerados: ${item.chunksCount}`);
   });
   console.log('========================================\n');
 }
