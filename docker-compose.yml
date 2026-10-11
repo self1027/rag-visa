@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   qdrant:
     image: qdrant/qdrant:latest
@@ -10,3 +12,23 @@ services:
       - ./qdrant_storage:/qdrant/storage
     environment:
       - QDRANT__SERVICE__ENABLE_STATIC_CONTENT=true
+    networks:
+      - rag-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama_visa
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_storage:/root/.ollama
+    networks:
+      - rag-network
+
+volumes:
+  ollama_storage:
+
+networks:
+  rag-network:
+    driver: bridge
