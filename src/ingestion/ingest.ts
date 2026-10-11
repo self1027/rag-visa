@@ -10,25 +10,26 @@ import { db } from '../db/index.js';
 import { documentsTable } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 
-const PDF_DIR = path.join(process.cwd(), 'data', 'pdfs');
 const BATCH_SIZE = 25;
 const EMBEDDING_CONCURRENCY = 1;
 
-export async function processPdfs() {
+export async function processPdfs(
+  pdfDir: string = path.join(process.cwd(), 'data', 'pdfs')
+) {
   await setupQdrantCollection();
 
-  if (!fs.existsSync(PDF_DIR)) {
-    fs.mkdirSync(PDF_DIR, { recursive: true });
+  if (!fs.existsSync(pdfDir)) {
+    fs.mkdirSync(pdfDir, { recursive: true });
   }
 
-  // Busca todos os documentos cadastrados no SQLite
+  // Fetch all documents registered in SQLite
   const dbDocuments = db.select().from(documentsTable).all();
   const metadataMap = new Map(dbDocuments.map(doc => [doc.filename, doc]));
 
-  const files = fs.readdirSync(PDF_DIR).filter((file) => file.endsWith('.pdf'));
+  const files = fs.readdirSync(pdfDir).filter((file) => file.endsWith('.pdf'));
 
   if (files.length === 0) {
-    console.log(`Nenhum ficheiro PDF encontrado na pasta: ${PDF_DIR}`);
+    console.log(`Nenhum ficheiro PDF encontrado na pasta: ${pdfDir}`);
     return;
   }
 
@@ -37,7 +38,7 @@ export async function processPdfs() {
   for (const file of files) {
     console.log(`\nProcessando arquivo: ${file}`);
     
-    // Procura os metadados no mapa carregado do SQLite (com fallbacks se não cadastrado)
+    // Look up the metadata in the map loaded from SQLite (with fallbacks if not registered)
     const fileMetadata = metadataMap.get(file);
     const esfera = fileMetadata?.esfera || 'municipal';
     const tipoDocumento = fileMetadata?.tipo || 'legislacao';
@@ -45,7 +46,7 @@ export async function processPdfs() {
 
     console.log(`- Metadados do Banco -> Esfera: ${esfera} | Tipo: ${tipoDocumento} | Titulo: ${tituloAmigavel}`);
 
-    const filePath = path.join(PDF_DIR, file);
+    const filePath = path.join(pdfDir, file);
     const dataBuffer = fs.readFileSync(filePath);
 
     const pdfData = await pdfParse(dataBuffer);
@@ -108,7 +109,7 @@ export async function processPdfs() {
     });
   }
 
-  // Overall Final da Ingestao
+  // Final ingestion summary
   console.log('\n========================================');
   console.log('OVERALL DA INGESTAO DE LEIS');
   console.log('========================================');

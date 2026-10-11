@@ -57,15 +57,16 @@ export async function analyzeAndNormalizeQuery(history: Array<{ role: string; co
     const content = response.choices[0]?.message?.content?.trim();
     if (!content) throw new Error('Resposta vazia do modelo de roteamento.');
 
-    // Remove eventuais marcações de markdown caso o modelo desobedeça
+    // Remove any markdown formatting in case the model disobeys
     const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(cleanJson);
 
-    let finalQuery = parsed.normalized_query || lastUserMessage;
+    // When needs_search is false, normalized_query should be empty string per the prompt
+    let finalQuery = parsed.needs_search ? (parsed.normalized_query || lastUserMessage) : '';
     
-    // TRAVA DE SEGURANÇA: Se a query normalizada vier muito longa (ex: o modelo despejou texto nela), 
-    // cortamos ou usamos a mensagem original do usuário para evitar corromper o Qdrant.
-    if (finalQuery.length > 200 || finalQuery.includes('Aqui está')) {
+    // SAFETY LOCK: If the normalized query comes back too long (ex: the model dumped text into it), 
+    // we truncate it or fall back to the original user message to avoid corrupting Qdrant.
+    if (parsed.needs_search && (finalQuery.length > 200 || finalQuery.includes('Aqui está'))) {
       finalQuery = lastUserMessage;
     }
 
