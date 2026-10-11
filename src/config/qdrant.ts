@@ -17,7 +17,7 @@ export async function setupQdrantCollection() {
       console.log(`🚀 Criando coleção '${COLLECTION_NAME}' no Qdrant...`);
       await qdrantClient.createCollection(COLLECTION_NAME, {
         vectors: {
-          size: 1024, // Dimensão nativa do bge-m3
+          size: 1024, // Native dimension of bge-m3
           distance: 'Cosine',
         },
       });

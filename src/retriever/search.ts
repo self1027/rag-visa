@@ -33,14 +33,14 @@ export async function searchLegislacao(
     baseFilterMust.push({ key: 'artigo', match: { value: artigo } });
   }
 
-  // 1. Busca Geral (com os filtros opcionais do usuário)
+  // 1. General search (with the user's optional filters)
   if (esfera) {
     baseFilterMust.push({ key: 'esfera', match: { value: esfera } });
   }
 
   const baseFilter = baseFilterMust.length > 0 ? { must: baseFilterMust } : undefined;
 
-  // Executa busca normal
+  // Run the normal search
   const responseGeral = await qdrantClient.query(COLLECTION_NAME, {
     query: queryVector,
     limit,
@@ -51,7 +51,7 @@ export async function searchLegislacao(
 
   const pointsGeral = responseGeral.points || responseGeral;
 
-  // 2. Garante a busca específica da esfera municipal (obrigatória para trazer pelo menos 1 municipal)
+  // 2. Ensure a specific search for the municipal sphere (required to bring at least 1 municipal result)
   const municipalFilterMust = [...baseFilterMust];
   const indexEsfera = municipalFilterMust.findIndex(f => f.key === 'esfera');
   
@@ -63,7 +63,7 @@ export async function searchLegislacao(
 
   const responseMunicipal = await qdrantClient.query(COLLECTION_NAME, {
     query: queryVector,
-    limit: 1, // Pega pelo menos o melhor resultado municipal
+    limit: 1, // Grab at least the best municipal result
     score_threshold: scoreThreshold,
     filter: { must: municipalFilterMust },
     with_payload: true,
@@ -71,13 +71,13 @@ export async function searchLegislacao(
 
   const pointsMunicipal = responseMunicipal.points || responseMunicipal;
 
-  // 3. Combina os resultados: garante que o resultado municipal entre no topo/conjunto
+  // 3. Combine the results: ensure the municipal result makes it into the top/set
   const mapPoints = new Map();
   
-  // Adiciona primeiro o resultado municipal (se existir na base)
+  // Add the municipal result first (if it exists in the collection)
   pointsMunicipal.forEach((hit: any) => mapPoints.set(hit.id, hit));
   
-  // Depois preenche o resto com a busca geral até atingir o limite estipulado
+  // Then fill the rest with the general search until the stipulated limit is reached
   pointsGeral.forEach((hit: any) => {
     if (mapPoints.size < limit) {
       mapPoints.set(hit.id, hit);

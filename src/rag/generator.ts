@@ -38,7 +38,7 @@ export async function askRAG(
     throw new Error('Nenhuma mensagem de usuário encontrada no histórico.');
   }
 
-  // 1. Analisa se a pergunta exige nova busca e normaliza em uma única passada otimizada
+  // 1. Analyze whether the question needs a new search and normalize in a single optimized pass
   const analysis = await analyzeAndNormalizeQuery(history);
 
   let contextHits: any[] = [];

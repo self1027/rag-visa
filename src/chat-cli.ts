@@ -3,8 +3,12 @@ import readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'process';
 import { askRAG, ChatMessage } from './rag/generator.js';
 
-async function runChatCLI() {
-  const rl = readline.createInterface({ input, output });
+export async function runChatCLI(
+  customInput = input,
+  customOutput = output,
+  customAskRAG = askRAG
+) {
+  const rl = readline.createInterface({ input: customInput, output: customOutput });
   const chatHistory: ChatMessage[] = [];
 
   console.log('==================================================');
@@ -23,18 +27,18 @@ async function runChatCLI() {
 
       if (question.trim() === '') continue;
 
-      // Adiciona a pergunta do usuário ao histórico
+      // Add the user question to the history
       chatHistory.push({ role: 'user', content: question });
 
-      process.stdout.write('\n🤖 Assistente: ');
+      customOutput.write('\n🤖 Assistente: ');
 
       try {
-        // Envia o histórico completo para o RAG
-        const result = await askRAG(chatHistory, (chunk) => {
-          process.stdout.write(chunk);
+        // Send the full history to RAG
+        const result = await customAskRAG(chatHistory, (chunk) => {
+          customOutput.write(chunk);
         });
 
-        // Adiciona a resposta da IA ao histórico para manter a memória das próximas perguntas
+        // Add the AI response to the history to keep memory for the next questions
         chatHistory.push({ role: 'assistant', content: result.answer });
 
         console.log('\n\n📚 Fontes Consultadas:');
@@ -48,7 +52,7 @@ async function runChatCLI() {
         }
       } catch (error) {
         console.error('\n❌ Erro ao processar a pergunta:', error);
-        // Remove a última pergunta do usuário do histórico se falhou
+        // Remove the last user question from the history if it failed
         chatHistory.pop();
       }
     }
@@ -57,4 +61,7 @@ async function runChatCLI() {
   }
 }
 
-runChatCLI();
+// Only run if this is the main module (not imported)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runChatCLI();
+}

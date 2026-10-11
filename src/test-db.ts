@@ -7,7 +7,7 @@ async function inspectQdrant() {
     const collectionInfo = await qdrantClient.getCollection(COLLECTION_NAME);
     console.log(`📊 Total de pontos indexados: ${collectionInfo.points_count}`);
 
-    // Extração 100% tipada da dimensão do vetor
+    // 100% typed extraction of the vector dimension
     const vectorsConfig = collectionInfo.config?.params?.vectors;
     let vectorSize: number | string = 'N/A';
 
