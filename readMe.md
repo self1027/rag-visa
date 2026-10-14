@@ -1,225 +1,95 @@
 # RAG VISA
 
-Assistente inteligente e sistema de Recuperação Aumentada por Geração (RAG) especializado em legislação de Vigilância Sanitária (VISA). Desenvolvido para apoiar fiscais, técnicos e munícipes na consulta rápida e precisa de leis municipais, estaduais e federais com alta fluidez e economia de tokens.
+API para consultar normas de vigilância sanitária a partir de PDFs cadastrados. O sistema extrai o texto, gera embeddings, busca trechos relevantes e transmite respostas com referências para o documento e a página, quando identificada.
 
----
+O projeto inclui cadastro de documentos, ingestão assíncrona com progresso, chat por SSE e avaliação da recuperação. O frontend deve ser implementado separadamente.
 
-## Tecnologias e Arquitetura
+## Tecnologias
 
-O projeto foi construído utilizando uma stack moderna em TypeScript:
+- Node.js 24, TypeScript e Express 5.
+- SQLite e Drizzle para metadados, fila de ingestão e evidências das conversas.
+- Qdrant para busca vetorial e Ollama com `bge-m3` para embeddings locais.
+- Groq para normalização das perguntas e geração das respostas.
 
-* **Qdrant**: Banco de dados vetorial para armazenamento e busca por similaridade dos trechos legais.
-* **Ollama**: Execução local de modelos de embeddings (`bge-m3`).
-* **Groq API (Qwen 3.8 27B)**: LLM de alta performance utilizada tanto na camada de **Roteamento Inteligente e Normalização de Consultas** quanto na **Geração de Respostas**.
-* **Intent Router / Bypass**: Mecanismo inteligente que detecta perguntas de continuação (*follow-ups*, resumos, formatações), pulando consultas vetoriais desnecessárias no Qdrant para garantir latência zero e economia de recursos.
-* **Express & SSE (Server-Sent Events)**: Servidor HTTP para streaming de respostas em tempo real para a interface web.
-* **SQLite + Drizzle ORM**: Persistência dos metadados dos documentos (título, esfera, tipo, ano, órgão) em banco local.
+Os PDFs e embeddings ficam na infraestrutura local. O histórico enviado ao chat e os trechos usados na resposta são enviados à Groq.
 
----
+## Executar localmente
 
-## Pré-requisitos
+Requisitos: Node.js 24, npm, Docker com Compose e uma chave da Groq.
 
-1. **Node.js** instalado (versão 18+ recomendada).
-2. **Docker** e **Docker Compose** instalados (para subir Qdrant e Ollama).
-3. Uma chave de API da **Groq** configurada no arquivo `.env`.
+```bash
+npm ci
+cp .env.example .env
+```
 
----
-
-## Subindo a Infraestrutura com Docker Compose
-
-O projeto inclui um `docker-compose.yml` que sobe o **Qdrant** e o **Ollama** já configurados e conectados na mesma rede:
+Preencha `GROQ_API_KEY` no `.env`. Em seguida:
 
 ```bash
 docker compose up -d
-```
-
-Isso irá iniciar:
-
-| Serviço | Container | Portas | Descrição |
-|---|---|---|---|
-| `qdrant` | `qdrant_visa` | `6333` (REST/Dashboard), `6334` (gRPC) | Banco vetorial com volume persistente em `./qdrant_storage` |
-| `ollama` | `ollama_visa` | `11434` | Runtime de embeddings com volume nomeado `ollama_storage` |
-
-### Baixando o modelo de embeddings
-
-Após o container do Ollama estar em execução, baixe o modelo `bge-m3` (usado na geração de embeddings) diretamente dentro do container:
-
-```bash
-docker exec -it ollama_visa ollama pull bge-m3
-```
-
-Para verificar se o modelo foi baixado corretamente:
-
-```bash
-docker exec -it ollama_visa ollama list
-```
-
-> **Dica:** para acompanhar os logs dos serviços:
-> ```bash
-> docker compose logs -f
-> ```
-> Para derrubar a stack (mantendo os volumes):
-> ```bash
-> docker compose down
-> ```
-
-### Alternativa sem Docker Compose
-
-Caso prefira rodar os serviços manualmente:
-
-**Ollama:**
-```bash
-ollama serve
-ollama pull bge-m3
-```
-
-**Qdrant:**
-```bash
-docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
-```
-
----
-
-## Configuração do Ambiente (.env)
-
-Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis:
-
-```env
-GROQ_API_KEY=sua_chave_da_groq_aqui
-OLLAMA_URL=http://localhost:11434
-PORT=3333
-```
-
----
-
-## Como Executar
-
-### 1. Instalação das Dependências
-
-```bash
-npm install
-```
-
-### 2. Ingestão de Documentos (PDFs)
-
-Coloque os arquivos PDF de legislação na pasta `data/pdfs/` e execute a ingestão:
-
-```bash
-npm run ingest
-```
-
-O script irá:
-
-1. Ler os metadados cadastrados no SQLite (via `documentsTable`).
-2. Extrair o texto de cada PDF.
-3. Dividir em chunks com metadados hierárquicos (artigo, livro, título, capítulo, seção).
-4. Gerar embeddings com `bge-m3` via Ollama.
-5. Inserir os pontos no Qdrant em lotes.
-
-> Para popular o banco de metadados a partir do dicionário pré-definido, execute:
-> ```bash
-> npx tsx src/utils/migration.ts
-> ```
-
-### 3. Executando o Servidor de Desenvolvimento (API RAG com Streaming)
-
-Inicie o servidor HTTP com suporte a Server-Sent Events (SSE):
-
-```bash
+docker compose exec ollama ollama pull bge-m3
 npm run dev:server
 ```
 
-Endpoints principais:
-
-| Método | Rota | Descrição |
-|---|---|---|
-| `GET` | `/api/documents` | Lista todos os documentos cadastrados |
-| `GET` | `/api/documents/:filename` | Faz download/stream de um PDF |
-| `POST` | `/api/documents` | Cadastra um novo documento (multipart) |
-| `PUT` | `/api/documents/:filename` | Atualiza metadados e/ou PDF |
-| `DELETE` | `/api/documents/:filename` | Remove documento e PDF |
-| `POST` | `/api/chat` | Chat com streaming SSE (rate limit: 5 req/min) |
-
-### 4. Executando o Chat Interativo no Terminal (CLI)
-
-Caso queira testar diretamente pelo console, sem interface web:
+A API atende em `http://localhost:3333`. Por padrão, o worker de ingestão roda junto com a API.
 
 ```bash
-npm run chat
+curl http://localhost:3333/api/health
+curl http://localhost:3333/api/ready
 ```
 
----
+`health` verifica se a API está respondendo; `ready` verifica Qdrant e a disponibilidade do modelo no Ollama. A chave e o acesso à Groq precisam funcionar para o chat.
 
-## Scripts Disponíveis
+## Cadastrar um PDF
 
-| Comando | Descrição |
-|---|---|
-| `npm run chat` | Inicia o chat interativo no terminal |
-| `npm run ingest` | Processa os PDFs e popula o Qdrant |
-| `npm run dev:server` | Sobe o servidor Express com hot-reload |
-| `npm run test:db` | Inspeciona a coleção do Qdrant (contagem, dimensão, amostra) |
-| `npm test` | Executa a suíte de testes (Vitest) |
-| `npm run test:watch` | Executa os testes em modo watch |
-| `npm run test:coverage` | Executa os testes com relatório de cobertura |
-| `npm run typecheck` | Verifica os tipos TypeScript sem emitir arquivos |
-
----
-
-## Estrutura do Projeto
-
-```
-.
-├── docker-compose.yml        # Qdrant + Ollama
-├── data/
-│   ├── database.sqlite       # Metadados dos documentos (criado em runtime)
-│   └── pdfs/                 # PDFs de legislação
-├── qdrant_storage/           # Volume persistente do Qdrant
-├── src/
-│   ├── server.ts             # API Express + SSE
-│   ├── chat-cli.ts           # Chat interativo no terminal
-│   ├── test-db.ts            # Inspeção do Qdrant
-│   ├── config/
-│   │   ├── ollama.ts         # Cliente Ollama + generateEmbedding
-│   │   └── qdrant.ts         # Cliente Qdrant + setup da coleção
-│   ├── db/
-│   │   ├── index.ts          # Conexão SQLite + Drizzle
-│   │   └── schema.ts         # Schema documentsTable
-│   ├── ingestion/
-│   │   └── ingest.ts         # Pipeline de ingestão de PDFs
-│   ├── middleware/
-│   │   ├── rateLimiter.ts    # Rate limit do /api/chat
-│   │   └── tokenLimiter.ts   # Corte de histórico por tokens
-│   ├── rag/
-│   │   ├── generator.ts      # askRAG (streaming + contexto)
-│   │   └── normalizer.ts     # Roteamento + normalização de query
-│   ├── retriever/
-│   │   └── search.ts         # Busca vetorial com filtros
-│   └── utils/
-│       ├── chunker.ts        # Chunking por artigo + hierarquia
-│       └── migration.ts      # Seed de metadados
-└── tests/
-    ├── setup.ts              # Configuração global do Vitest
-    ├── integration/          # Testes da API HTTP
-    └── unit/                 # Testes unitários
-```
-
----
-
-## Testes
-
-A suíte cobre unidade e integração com Vitest:
+Use um PDF com texto selecionável, fora do diretório de armazenamento do servidor:
 
 ```bash
-npm test
+curl -X POST http://localhost:3333/api/documents \
+  -F 'file=@/caminho/norma.pdf' \
+  -F 'titulo=Norma de exemplo' \
+  -F 'esfera=federal' \
+  -F 'tipo=legislacao' \
+  -F 'ano=2024' \
+  -F 'orgao=Órgão responsável'
 ```
 
-Áreas cobertas:
+O retorno `201` confirma o cadastro e o enfileiramento. Consulte `GET /api/documents` para acompanhar `ingestion.status`, `ingestion.phase` e `ingestion.progress` de cada documento. O frontend pode usar esse percentual na barra de progresso; `completed` indica conclusão e `failed` exige tratamento de erro.
 
-- **Unitários**: `search`, `generator`, `normalizer`, `chunker`, `tokenLimiter`, `rateLimiter`, `ollama`, `qdrant`, `schema`, `ingestion`, `cli`.
-- **Integração**: rotas HTTP de documentos (CRUD + upload) e `/api/chat` (streaming SSE, validação, rate limit, token limit).
+PDFs colocados diretamente em `data/pdfs` precisam ter metadados cadastrados no SQLite antes de `npm run ingest`. Não existe cadastro automático desses arquivos nem OCR para PDFs digitalizados.
 
----
+## Consultar o chat
 
-## Licença
+```bash
+curl -N http://localhost:3333/api/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"history":[{"role":"user","content":"Quais normas tratam de boas práticas em serviços de alimentação?"}]}'
+```
 
-ISC
+A resposta usa SSE em uma requisição **POST**: eventos `chunk`, `sources` e o marcador `[DONE]`. O frontend deve ler o fluxo com `fetch`. Veja o contrato completo e os filtros na [documentação da API](docs/api.md).
+
+## Comandos úteis
+
+| Comando | Finalidade |
+| --- | --- |
+| `npm run start` | Iniciar a API sem recarregamento automático |
+| `npm run worker` | Iniciar um worker independente |
+| `npm run chat` | Abrir o chat no terminal |
+| `npm run ingest` | Ingerir PDFs já cadastrados |
+| `npm run typecheck` | Verificar tipos |
+| `npm test` | Executar testes automatizados |
+| `npm run test:live` | Testar ingestão com Qdrant e Ollama reais |
+| `npm run eval:rag -- --grid` | Avaliar configurações de recuperação |
+
+## Documentação do sistema
+
+A documentação é escrita em **Markdown e versionada junto com o código**, sem ferramentas adicionais de publicação. O [índice em `docs/`](docs/README.md) reúne:
+
+- [Arquitetura e fluxo dos dados](docs/architecture.md).
+- [API e integração com o frontend](docs/api.md).
+- [Configuração por ambiente](docs/configuration.md).
+- [Operação, Docker, recuperação e backup](docs/operations.md).
+- [Testes e avaliação do RAG](docs/testing.md).
+
+A configuração atual permite acesso aberto na intranet: `ADMIN_API_TOKEN` e `CORS_ORIGINS` vazios. Essas opções podem ser restringidas futuramente. Nenhuma jurisdição municipal é aplicada automaticamente; os filtros são enviados pelo cliente.
+
+As respostas dependem das normas cadastradas. A vigência desconhecida permanece explícita e a qualidade jurídica deve ser revisada com casos representativos antes de usar o sistema como base de decisão.
