@@ -1,103 +1,50 @@
 import { qdrantClient, COLLECTION_NAME } from '../config/qdrant.js';
 import { generateEmbedding } from '../config/ollama.js';
-
+import { settings } from '../config/settings.js';
 export interface SearchOptions {
-  limit?: number;
-  scoreThreshold?: number;
-  esfera?: 'federal' | 'estadual' | 'municipal';
-  artigo?: string;
+  limit?: number; scoreThreshold?: number; esfera?: 'federal' | 'estadual' | 'municipal';
+  artigo?: string; jurisdicao?: string; preferMunicipal?: boolean; signal?: AbortSignal;
 }
-
 export interface SearchResult {
-  score: number;
-  content: string;
-  artigo: string;
-  livro?: string | null;
-  titulo?: string | null;
-  capitulo?: string | null;
-  secao?: string | null;
-  esfera: 'federal' | 'estadual' | 'municipal';
-  fonte_pdf: string;
+  score: number; content: string; artigo: string;
+  livro?: string | null; titulo?: string | null; capitulo?: string | null; secao?: string | null;
+  esfera: 'federal' | 'estadual' | 'municipal'; fonte_pdf: string;
+  id?: string | number; filename?: string; pagina?: number; paginaFim?: number;
+  jurisdicao?: string | null; urlOficial?: string | null; vigencia?: string; versao?: string | null;
 }
-
-export async function searchLegislacao(
-  query: string,
-  options: SearchOptions = {}
-): Promise<SearchResult[]> {
-  const { limit = 5, scoreThreshold = 0.3, esfera, artigo } = options;
-
-  const queryVector = await generateEmbedding(query);
-  const baseFilterMust: any[] = [];
-
-  if (artigo) {
-    baseFilterMust.push({ key: 'artigo', match: { value: artigo } });
-  }
-
-  // 1. General search (with the user's optional filters)
-  if (esfera) {
-    baseFilterMust.push({ key: 'esfera', match: { value: esfera } });
-  }
-
-  const baseFilter = baseFilterMust.length > 0 ? { must: baseFilterMust } : undefined;
-
-  // Run the normal search
-  const responseGeral = await qdrantClient.query(COLLECTION_NAME, {
-    query: queryVector,
-    limit,
-    score_threshold: scoreThreshold,
-    filter: baseFilter,
-    with_payload: true,
+export async function searchLegislacao(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+  const { limit = settings.searchLimit, scoreThreshold = settings.searchThreshold, esfera, artigo, jurisdicao } = options;
+  options.signal?.throwIfAborted();
+  const vector = await generateEmbedding(query, options.signal);
+  const must: any[] = [];
+  if (artigo) must.push({ key: 'artigo', match: { value: artigo } });
+  if (esfera) must.push({ key: 'esfera', match: { value: esfera } });
+  // Local rules require a matching jurisdiction. Federal rules remain eligible.
+  if (jurisdicao) must.push({ should: [
+    { key: 'esfera', match: { value: 'federal' } },
+    { key: 'jurisdicao', match: { any: [jurisdicao, jurisdicao.split('/').at(-1)!] } },
+  ] });
+  const must_not = [ { key: 'indexed', match: { value: false } }, { key: 'vigencia', match: { value: 'revogada' } } ];
+  const response = await qdrantClient.query(COLLECTION_NAME, {
+    query: vector, limit, score_threshold: scoreThreshold, filter: { must, must_not }, with_payload: true,
   });
-
-  const pointsGeral = responseGeral.points || responseGeral;
-
-  // 2. Ensure a specific search for the municipal sphere (required to bring at least 1 municipal result)
-  const municipalFilterMust = [...baseFilterMust];
-  const indexEsfera = municipalFilterMust.findIndex(f => f.key === 'esfera');
-  
-  if (indexEsfera >= 0) {
-    municipalFilterMust[indexEsfera] = { key: 'esfera', match: { value: 'municipal' } };
-  } else {
-    municipalFilterMust.push({ key: 'esfera', match: { value: 'municipal' } });
+  let points = response.points;
+  if (options.preferMunicipal && jurisdicao && (!esfera || esfera === 'municipal')) {
+    const municipal = await qdrantClient.query(COLLECTION_NAME, {
+      query: vector, limit: 1, score_threshold: scoreThreshold,
+      filter: { must: [...must, { key: 'esfera', match: { value: 'municipal' } }, { key: 'jurisdicao', match: { value: jurisdicao } }], must_not },
+      with_payload: true,
+    });
+    points = [...new Map([...municipal.points, ...points].map(point => [point.id, point])).values()].slice(0, limit);
   }
-
-  const responseMunicipal = await qdrantClient.query(COLLECTION_NAME, {
-    query: queryVector,
-    limit: 1, // Grab at least the best municipal result
-    score_threshold: scoreThreshold,
-    filter: { must: municipalFilterMust },
-    with_payload: true,
-  });
-
-  const pointsMunicipal = responseMunicipal.points || responseMunicipal;
-
-  // 3. Combine the results: ensure the municipal result makes it into the top/set
-  const mapPoints = new Map();
-  
-  // Add the municipal result first (if it exists in the collection)
-  pointsMunicipal.forEach((hit: any) => mapPoints.set(hit.id, hit));
-  
-  // Then fill the rest with the general search until the stipulated limit is reached
-  pointsGeral.forEach((hit: any) => {
-    if (mapPoints.size < limit) {
-      mapPoints.set(hit.id, hit);
-    }
-  });
-
-  const finalPoints = Array.from(mapPoints.values());
-
-  return finalPoints.map((hit: any) => {
-    const payload = (hit.payload || {}) as Record<string, any>;
+  options.signal?.throwIfAborted();
+  return points.filter(hit => typeof hit.payload?.content === 'string').map(hit => {
+    const p = hit.payload as Record<string, any>;
     return {
-      score: hit.score,
-      content: payload.content,
-      artigo: payload.artigo,
-      livro: payload.livro ?? null,
-      titulo: payload.titulo ?? null,
-      capitulo: payload.capitulo ?? null,
-      secao: payload.secao ?? null,
-      esfera: payload.esfera,
-      fonte_pdf: payload.fonte_pdf,
+      id: hit.id, score: hit.score, content: p.content, artigo: p.artigo || 'Geral/Introdução',
+      livro: p.livro ?? null, titulo: p.titulo ?? null, capitulo: p.capitulo ?? null, secao: p.secao ?? null,
+      esfera: p.esfera, fonte_pdf: p.fonte_pdf, filename: p.filename, pagina: p.pagina, paginaFim: p.paginaFim,
+      jurisdicao: p.jurisdicao ?? null, urlOficial: p.url_oficial ?? null, vigencia: p.vigencia || 'desconhecida', versao: p.versao ?? null,
     };
   });
 }

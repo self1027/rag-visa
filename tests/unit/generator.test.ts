@@ -57,6 +57,7 @@ describe('askRAG', () => {
     process.env.GROQ_API_KEY = 'test-key';
     mockAnalyzeAndNormalizeQuery.mockReset();
     mockSearchLegislacao.mockReset();
+    mockSearchLegislacao.mockResolvedValue([mockSearchResult]);
     mockGroqCreate.mockReset();
   });
 
@@ -106,7 +107,7 @@ describe('askRAG', () => {
               content: expect.stringContaining('Terceira pergunta'),
             }),
           ]),
-        })
+        }), { signal: undefined }
       );
     });
   });
@@ -132,7 +133,8 @@ describe('askRAG', () => {
 
       expect(mockSearchLegislacao).toHaveBeenCalledWith('consulta normalizada', {
         limit: 6,
-        scoreThreshold: 0.25,
+        scoreThreshold: 0.3,
+        signal: undefined,
       });
     });
 
@@ -253,9 +255,8 @@ describe('askRAG', () => {
       const result = await askRAG(history);
 
       expect(result.sources).toEqual([]);
-      const callArgs = mockGroqCreate.mock.calls[0][0];
-      const userMessage = callArgs.messages.find((m: any) => m.role === 'user');
-      expect(userMessage.content).toContain('Nenhum trecho específico encontrado');
+      expect(mockGroqCreate).not.toHaveBeenCalled();
+      expect(result.answer).toContain('Não encontrei embasamento');
     });
 
     it('should use previous context when needsSearch is false', async () => {
@@ -274,8 +275,21 @@ describe('askRAG', () => {
 
       const callArgs = mockGroqCreate.mock.calls[0][0];
       const userMessage = callArgs.messages.find((m: any) => m.role === 'user');
-      expect(userMessage.content).toContain('Utilize o contexto da legislação discutida nas mensagens anteriores');
+      expect(userMessage.content).toContain('Conteúdo do artigo legal.');
     });
+  });
+
+  it('reuses saved excerpts for formatting and searches again for technical follow-ups', async () => {
+    mockAnalyzeAndNormalizeQuery.mockResolvedValue({ needsSearch: false, normalizedQuery: '' });
+    mockGroqCreate.mockImplementation(async () => ({ [Symbol.asyncIterator]: async function* () {
+      yield { choices: [{ delta: { content: 'Resposta [1]' } }] };
+    } }));
+    const formatted = await askRAG([{ role: 'user', content: 'Resuma em tópicos' }], undefined, { evidence: [mockSearchResult] });
+    expect(mockSearchLegislacao).not.toHaveBeenCalled();
+    expect(formatted.evidence).toEqual([mockSearchResult]);
+    expect(mockGroqCreate.mock.calls[0][0].messages.at(-1).content).toContain(mockSearchResult.content);
+    await askRAG([{ role: 'user', content: 'E para armazenamento refrigerado?' }], undefined, { evidence: [mockSearchResult] });
+    expect(mockSearchLegislacao).toHaveBeenCalledTimes(1);
   });
 
   describe('message ordering', () => {
@@ -359,7 +373,7 @@ describe('askRAG', () => {
           temperature: 0.1,
           max_tokens: 1000,
           stream: true,
-        })
+        }), { signal: undefined }
       );
     });
   });

@@ -2,6 +2,8 @@ export interface DocumentChunk {
   content: string;
   metadata: {
     artigo?: string;
+    pagina?: number;
+    paginaFim?: number;
     livro?: string;
     titulo?: string;
     capitulo?: string;
@@ -27,8 +29,8 @@ function splitLargeChunk(
   overlap: number = OVERLAP_LENGTH
 ): string[] {
   const result: string[] = [];
-  const headerPrefix = contextHeader ? `[${contextHeader}]\n` : '';
-  const effectiveMax = maxLength - headerPrefix.length;
+  const headerPrefix = contextHeader ? `[${contextHeader.slice(0, 500)}]\n` : '';
+  const effectiveMax = Math.max(overlap + 1, maxLength - headerPrefix.length);
 
   let start = 0;
   while (start < text.length) {
@@ -90,13 +92,21 @@ export function chunkLegislacao(
     tipoDocumento = 'modelo_notificacao';
   }
 
-  // 4. Split by Article or by Sections/Items
-  const articleRegex = /(?=\bArt(?:igo|\.)?\s*[\d\.\-\º°\^]+[A-Za-z]?)/i;
-  let rawChunks = cleanText.split(articleRegex);
-
-  if (rawChunks.length <= 1) {
-    rawChunks = cleanText.split(/\n\n+/);
+  const articleRegex = /(?=^[ \t]*Art(?:igo|\.)?\s*[\d.\-º°^]+[A-Za-z]?)/im;
+  const segments: Array<{ text: string; header?: string }> = [];
+  let position = 0;
+  HIERARCHY_REGEX.lastIndex = 0;
+  for (const match of cleanText.matchAll(HIERARCHY_REGEX)) {
+    if (match.index! > position) segments.push({ text: cleanText.slice(position, match.index) });
+    segments.push({ text: '', header: match[1].trim() });
+    position = match.index! + match[0].length;
   }
+  segments.push({ text: cleanText.slice(position) });
+  const rawChunks: Array<{ text: string; header?: string }> = segments.flatMap(segment => {
+    if (segment.header) return [segment];
+    const pieces = segment.text.split(articleRegex);
+    return (pieces.length > 1 ? pieces : segment.text.split(/\n\n+/)).map(text => ({ text }));
+  });
 
   const chunks: DocumentChunk[] = [];
 
@@ -107,22 +117,20 @@ export function chunkLegislacao(
   let currentSecao = '';
 
   for (const rawChunk of rawChunks) {
-    const trimmed = rawChunk.trim();
-    // Allow shorter chunks for hierarchy headers (LIVRO, TÍTULO, etc.)
-    if (trimmed.length < 3) continue;
-
-    // Check for hierarchy headers BEFORE processing the chunk
-    // Only match at start of text or after newline to avoid matching in article text
-    // Reset regex lastIndex for each use
-    HIERARCHY_REGEX.lastIndex = 0;
-    const hierarchyMatches = trimmed.matchAll(HIERARCHY_REGEX);
-    for (const match of hierarchyMatches) {
-      const header = match[1].trim();
-      if (header.startsWith('LIVRO')) currentLivro = header;
-      else if (header.startsWith('TÍTULO')) currentTitulo = header;
-      else if (header.startsWith('CAPÍTULO')) currentCapitulo = header;
-      else if (header.startsWith('SEÇÃO')) currentSecao = header;
+    if (rawChunk.header) {
+      const header = rawChunk.header;
+      const upper = header.toUpperCase();
+      if (upper.startsWith('LIVRO')) {
+        currentLivro = header; currentTitulo = ''; currentCapitulo = ''; currentSecao = '';
+      } else if (upper.startsWith('TÍTULO')) {
+        currentTitulo = header; currentCapitulo = ''; currentSecao = '';
+      } else if (upper.startsWith('CAPÍTULO')) {
+        currentCapitulo = header; currentSecao = '';
+      } else if (upper.startsWith('SEÇÃO')) currentSecao = header;
+      continue;
     }
+    const trimmed = rawChunk.text.trim();
+    if (trimmed.length < 3) continue;
 
     // Save the hierarchy context for this chunk's metadata
     const chunkLivro = currentLivro;
@@ -156,7 +164,7 @@ export function chunkLegislacao(
     };
 
     // 5. Safety Lock: If the article text exceeds MAX_CHUNK_LENGTH, apply the secondary split
-    if (trimmed.length > MAX_CHUNK_LENGTH) {
+    if (trimmed.length + contextHeader.length + 3 > MAX_CHUNK_LENGTH) {
       const subChunks = splitLargeChunk(trimmed, contextHeader);
       for (const subContent of subChunks) {
         chunks.push({

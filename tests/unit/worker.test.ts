@@ -1,0 +1,26 @@
+import { it, expect, vi, afterEach } from 'vitest';
+import { createTestDb } from '../setup.js';
+import { migrateDatabase } from '../../src/db/migrate.js';
+import { documentsTable, documentIngestionsTable } from '../../src/db/schema.js';
+import { createIngestionService } from '../../src/ingestion/service.js';
+const resources: Array<() => void> = [];
+afterEach(() => { for (const cleanup of resources.splice(0)) cleanup(); });
+it('independent workers cannot claim the same live job, but can reclaim an expired lease', async () => {
+  const { db, sqlite } = createTestDb(); migrateDatabase(db);
+  db.insert(documentsTable).values({ filename: 'test.pdf', titulo: 'Test', esfera: 'federal', tipo: 'legislacao', ano: 2024, orgao: 'Test' }).run();
+  let release!: () => void;
+  const ingest = vi.fn(async () => { await new Promise<void>(resolve => { release = resolve; }); });
+  const first = createIngestionService(db, '/tmp', ingest, vi.fn(), { leaseMs: 1000 });
+  const secondIngest = vi.fn().mockResolvedValue(undefined);
+  const second = createIngestionService(db, '/tmp', secondIngest);
+  resources.push(() => { first.stop(); second.stop(); sqlite.close(); });
+  first.enqueue('test.pdf');
+  await vi.waitFor(() => expect(ingest).toHaveBeenCalledTimes(1));
+  second.resume(); await second.waitUntilIdle();
+  expect(secondIngest).not.toHaveBeenCalled();
+  db.update(documentIngestionsTable).set({ leaseUntil: 0 }).run();
+  second.resume(); await second.waitUntilIdle();
+  expect(secondIngest).toHaveBeenCalledTimes(1);
+  release(); await first.waitUntilIdle();
+  expect(db.select().from(documentIngestionsTable).get()?.status).toBe('completed');
+});

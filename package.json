@@ -11,7 +11,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "worker": "tsx src/ingestion/worker.ts",
+    "test:live": "RUN_LIVE_TESTS=1 vitest run tests/live",
+    "eval:rag": "tsx src/evaluation/run.ts",
+    "start": "tsx src/server.ts"
   },
   "keywords": [],
   "author": "",

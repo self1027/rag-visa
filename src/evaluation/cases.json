@@ -1,0 +1,8 @@
+[
+  {"id":"rdc216-approval","query":"RDC 216 2004 artigo 1 regulamento técnico boas práticas serviços alimentação", "expectedSource":"216/2004", "expectedArticle":"Art. 1", "expectedTerms":["regulamento","boas práticas"]},
+  {"id":"rdc216-local","query":"RDC 216 2004 artigo 2 complementação órgãos estaduais distrital municipais", "expectedSource":"216/2004", "expectedArticle":"Art. 2", "expectedTerms":["complementada","municipais"]},
+  {"id":"rdc222-scope","query":"RDC 222 2018 artigo 2 geradores resíduos serviços saúde públicos privados", "expectedSource":"222/2018", "expectedArticle":"Art. 2", "expectedTerms":["geradores","resíduos"]},
+  {"id":"rdc222-objective","query":"RDC 222 2018 artigo 1 requisitos boas práticas gerenciamento resíduos", "expectedSource":"222/2018", "expectedArticle":"Art. 1", "expectedTerms":["gerenciamento","resíduos"]},
+  {"id":"cvs5-transport","query":"Portaria CVS 5 2013 artigo 56 alimentos transporte piso carga paletes", "expectedSource":"5/2013", "expectedArticle":"Art. 56", "expectedTerms":["piso","paletes"]},
+  {"id":"absent-scope","query":"norma de navegação interplanetária para transporte de alimentos em Marte", "expectedSource":null, "expectedArticle":null, "expectedTerms":[], "esfera":"municipal", "jurisdicao":"Marte/EX"}
+]

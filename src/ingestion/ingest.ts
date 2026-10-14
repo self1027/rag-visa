@@ -1,130 +1,43 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { v4 as uuidv4 } from 'uuid';
-import { qdrantClient, COLLECTION_NAME, setupQdrantCollection } from '../config/qdrant.js';
-import { generateEmbedding } from '../config/ollama.js';
-import { chunkLegislacao } from '../utils/chunker.js';
-import pdfParse from 'pdf-parse-new';
+import 'dotenv/config';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { db } from '../db/index.js';
-import { documentsTable } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { documentsTable, documentIngestionsTable } from '../db/schema.js';
+import { createIngestionService } from './service.js';
 
-const BATCH_SIZE = 25;
-const EMBEDDING_CONCURRENCY = 1;
-
-export async function processPdfs(
-  pdfDir: string = path.join(process.cwd(), 'data', 'pdfs')
-) {
-  await setupQdrantCollection();
-
-  if (!fs.existsSync(pdfDir)) {
-    fs.mkdirSync(pdfDir, { recursive: true });
+// The CLI and HTTP uploads share the same pipeline and persisted progress.
+export async function processPdfs(pdfDir = path.join(process.cwd(), 'data', 'pdfs')) {
+  fs.mkdirSync(pdfDir, { recursive: true });
+  const documents = db.select().from(documentsTable).all();
+  const filenames = new Set(documents.map(document => document.filename));
+  const unregistered = fs.readdirSync(pdfDir).filter(file => file.toLowerCase().endsWith('.pdf') && !filenames.has(file));
+  if (unregistered.length) {
+    throw new Error(`Cadastre os metadados antes de ingerir: ${unregistered.join(', ')}`);
   }
-
-  // Fetch all documents registered in SQLite
-  const dbDocuments = db.select().from(documentsTable).all();
-  const metadataMap = new Map(dbDocuments.map(doc => [doc.filename, doc]));
-
-  const files = fs.readdirSync(pdfDir).filter((file) => file.endsWith('.pdf'));
-
-  if (files.length === 0) {
-    console.log(`Nenhum ficheiro PDF encontrado na pasta: ${pdfDir}`);
-    return;
-  }
-
-  const summaryReport: Array<{ file: string; esfera: string; tipo: string; chunksCount: number }> = [];
-
-  for (const file of files) {
-    console.log(`\nProcessando arquivo: ${file}`);
-    
-    // Look up the metadata in the map loaded from SQLite (with fallbacks if not registered)
-    const fileMetadata = metadataMap.get(file);
-    const esfera = fileMetadata?.esfera || 'municipal';
-    const tipoDocumento = fileMetadata?.tipo || 'legislacao';
-    const tituloAmigavel = fileMetadata?.titulo || file;
-
-    console.log(`- Metadados do Banco -> Esfera: ${esfera} | Tipo: ${tipoDocumento} | Titulo: ${tituloAmigavel}`);
-
-    const filePath = path.join(pdfDir, file);
-    const dataBuffer = fs.readFileSync(filePath);
-
-    const pdfData = await pdfParse(dataBuffer);
-    console.log(`- Texto extraido (${pdfData.text.length} caracteres).`);
-
-    const chunks = chunkLegislacao(pdfData.text, file);
-    console.log(`- Gerados ${chunks.length} chunks com metadados.`);
-
-    console.log('- Gerando embeddings e preparando pontos...');
-    
-    const points = [];
-
-    for (let i = 0; i < chunks.length; i += EMBEDDING_CONCURRENCY) {
-      const batchChunks = chunks.slice(i, i + EMBEDDING_CONCURRENCY);
-
-      const batchPoints = await Promise.all(
-        batchChunks.map(async (chunk) => {
-          const vector = await generateEmbedding(chunk.content);
-
-          return {
-            id: uuidv4(),
-            vector,
-            payload: {
-              content: chunk.content,
-              artigo: chunk.metadata.artigo,
-              livro: chunk.metadata.livro || undefined,
-              titulo: chunk.metadata.titulo || undefined,
-              capitulo: chunk.metadata.capitulo || undefined,
-              secao: chunk.metadata.secao || undefined,
-              tipo_documento: tipoDocumento,
-              esfera: esfera,
-              fonte_pdf: tituloAmigavel,
-            },
-          };
-        })
-      );
-
-      points.push(...batchPoints);
-      process.stdout.write(`  Embeddings: ${points.length}/${chunks.length}\r`);
+  for (const document of documents) {
+    const state = db.select().from(documentIngestionsTable).all().find(job => job.filename === document.filename);
+    if (state && ['queued', 'processing', 'deleting'].includes(state.status)) {
+      throw new Error(`${document.filename} já está em ingestão. Aguarde o servidor concluir.`);
     }
-
-    console.log('\n- Inserindo lotes no Qdrant...');
-
-    for (let i = 0; i < points.length; i += BATCH_SIZE) {
-      const batch = points.slice(i, i + BATCH_SIZE);
-      await qdrantClient.upsert(COLLECTION_NAME, {
-        wait: true,
-        points: batch,
-      });
-      console.log(`  Enviados ${Math.min(i + BATCH_SIZE, points.length)}/${points.length} pontos.`);
+    if (!fs.existsSync(path.join(pdfDir, document.filename))) {
+      throw new Error(`PDF cadastrado não encontrado: ${document.filename}`);
     }
-
-    console.log(`${file} indexado com sucesso!`);
-    
-    summaryReport.push({
-      file,
-      esfera,
-      tipo: tipoDocumento,
-      chunksCount: chunks.length,
-    });
   }
-
-  // Final ingestion summary
-  console.log('\n========================================');
-  console.log('OVERALL DA INGESTAO DE LEIS');
-  console.log('========================================');
-  console.log(`Total de arquivos processados com sucesso: ${summaryReport.length}`);
-  console.log('----------------------------------------');
-  summaryReport.forEach((item, idx) => {
-    console.log(`${idx + 1}. Arquivo: ${item.file}`);
-    console.log(`    - Esfera mapeada: ${item.esfera}`);
-    console.log(`    - Tipo: ${item.tipo}`);
-    console.log(`    - Chunks gerados: ${item.chunksCount}`);
-  });
-  console.log('========================================\n');
+  const service = createIngestionService(db, pdfDir, undefined, undefined, { worker: true });
+  for (const document of documents) service.enqueue(document.filename);
+  await service.waitUntilIdle();
+  service.stop();
+  const states = db.select().from(documentIngestionsTable).all();
+  const failures = states.filter(state => filenames.has(state.filename) && state.status === 'failed');
+  if (failures.length) throw new Error(`Falha na ingestão de: ${failures.map(state => state.filename).join(', ')}`);
+  console.log(`${documents.length} documento(s) indexado(s). Progresso disponível em GET /api/documents.`);
 }
 
-const __filename = fileURLToPath(import.meta.url);
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename)) {
-  processPdfs().catch(console.error);
+const filename = fileURLToPath(import.meta.url);
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(filename)) {
+  processPdfs().catch(error => {
+    console.error(error);
+    process.exitCode = 1;
+  });
 }

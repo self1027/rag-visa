@@ -1,12 +1,19 @@
+import { log } from '../observability/index.js';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { settings } from './settings.js';
 import { Ollama } from 'ollama';
 
+const requestSignals = new AsyncLocalStorage<AbortSignal>();
+
 export const ollamaClient = new Ollama({
-  host: process.env.OLLAMA_URL || 'http://localhost:11434',
+  host: settings.ollamaUrl,
+  fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.any([...(init?.signal ? [init.signal] : []), ...(requestSignals.getStore() ? [requestSignals.getStore()!] : []), AbortSignal.timeout(settings.requestTimeoutMs)]) }),
 });
 
-const EMBEDDING_MODEL = 'bge-m3';
+const EMBEDDING_MODEL = settings.embeddingModel;
 
-export async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(text: string, signal?: AbortSignal): Promise<number[]> {
+  signal?.throwIfAborted();
   const cleanText = text?.trim();
 
   if (!cleanText) {
@@ -14,7 +21,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   }
 
   try {
-    const response = await ollamaClient.embeddings({
+    const request = () => ollamaClient.embeddings({
       model: EMBEDDING_MODEL,
       prompt: cleanText,
       options: {
@@ -22,12 +29,11 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       },
     });
 
+    const response = await (signal ? requestSignals.run(signal, request) : request());
+    signal?.throwIfAborted();
     return response.embedding;
   } catch (error) {
-    console.error(
-      `Erro ao gerar embedding para o texto: "${cleanText.slice(0, 30)}..."`,
-      error
-    );
+    log('embedding_failed', { errorType: error instanceof Error ? error.name : 'unknown' });
     throw error;
   }
 }

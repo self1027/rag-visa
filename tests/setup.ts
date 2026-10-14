@@ -1,6 +1,7 @@
 // Global test setup - runs before all tests
 import { vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
+import { migrateDatabase } from '../src/db/migrate.js';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { documentsTable } from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
@@ -48,6 +49,7 @@ export function createTestDb() {
     )
   `);
   
+  migrateDatabase(db);
   return { sqlite, db };
 }
 
@@ -68,6 +70,7 @@ export function createTempFileDb() {
     )
   `);
   
+  migrateDatabase(db);
   return { 
     sqlite, 
     db, 

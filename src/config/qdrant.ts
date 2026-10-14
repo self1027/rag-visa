@@ -1,10 +1,12 @@
+import { settings } from './settings.js';
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 export const qdrantClient = new QdrantClient({
-  url: 'http://localhost:6333',
+  url: settings.qdrantUrl,
+  timeout: settings.requestTimeoutMs,
 });
 
-export const COLLECTION_NAME = 'legislacao_visa';
+export const COLLECTION_NAME = settings.collection;
 
 export async function setupQdrantCollection() {
   try {
@@ -17,7 +19,7 @@ export async function setupQdrantCollection() {
       console.log(`🚀 Criando coleção '${COLLECTION_NAME}' no Qdrant...`);
       await qdrantClient.createCollection(COLLECTION_NAME, {
         vectors: {
-          size: 1024, // Native dimension of bge-m3
+          size: settings.embeddingDimensions, // Native dimension of bge-m3
           distance: 'Cosine',
         },
       });

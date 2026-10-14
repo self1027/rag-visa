@@ -1,3 +1,5 @@
+import { log } from '../observability/index.js';
+import { settings } from '../config/settings.js';
 import 'dotenv/config';
 import OpenAI from 'openai';
 
@@ -9,6 +11,8 @@ if (!apiKey) {
 const groqClient = new OpenAI({
   baseURL: 'https://api.groq.com/openai/v1',
   apiKey: apiKey,
+  timeout: settings.requestTimeoutMs,
+  maxRetries: 1,
 });
 
 const ROUTER_NORMALIZER_PROMPT = `Você é um analisador JSON estrito para um sistema RAG de Vigilância Sanitária.
@@ -28,11 +32,11 @@ export interface AnalysisResult {
   normalizedQuery: string;
 }
 
-export async function analyzeAndNormalizeQuery(history: Array<{ role: string; content: string }>): Promise<AnalysisResult> {
+export async function analyzeAndNormalizeQuery(history: Array<{ role: string; content: string }>, signal?: AbortSignal): Promise<AnalysisResult> {
   try {
     if (history.length <= 1) {
       const lastMsg = history[history.length - 1]?.content || '';
-      const fallbackNormalized = await directNormalize(lastMsg);
+      const fallbackNormalized = await directNormalize(lastMsg, signal);
       return { needsSearch: true, normalizedQuery: fallbackNormalized };
     }
 
@@ -40,7 +44,7 @@ export async function analyzeAndNormalizeQuery(history: Array<{ role: string; co
     const previousAssistantMessage = history[history.length - 2]?.content || '';
 
     const response = await groqClient.chat.completions.create({
-      model: 'qwen/qwen3.8-27b',
+      model: settings.groqModel,
       messages: [
         { role: 'system', content: ROUTER_NORMALIZER_PROMPT },
         { 
@@ -51,8 +55,8 @@ export async function analyzeAndNormalizeQuery(history: Array<{ role: string; co
       temperature: 0.0,
       max_tokens: 150,
       response_format: { type: "json_object" }
-    });
-    console.log('Resposta do roteador inteligente:', response.choices[0]?.message?.content);
+    }, { signal });
+
 
     const content = response.choices[0]?.message?.content?.trim();
     if (!content) throw new Error('Resposta vazia do modelo de roteamento.');
@@ -60,6 +64,7 @@ export async function analyzeAndNormalizeQuery(history: Array<{ role: string; co
     // Remove any markdown formatting in case the model disobeys
     const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(cleanJson);
+    if (typeof parsed.needs_search !== 'boolean' || typeof parsed.normalized_query !== 'string') throw new Error('Resposta de roteamento inválida.');
 
     // When needs_search is false, normalized_query should be empty string per the prompt
     let finalQuery = parsed.needs_search ? (parsed.normalized_query || lastUserMessage) : '';
@@ -76,26 +81,28 @@ export async function analyzeAndNormalizeQuery(history: Array<{ role: string; co
     };
 
   } catch (error) {
-    console.error('Falha no roteador inteligente. Usando fallback padrão:', error);
+    signal?.throwIfAborted();
+    log('router_fallback', { errorType: error instanceof Error ? error.name : 'unknown' });
     const lastMsg = history[history.length - 1]?.content || '';
     return { needsSearch: true, normalizedQuery: lastMsg };
   }
 }
 
-async function directNormalize(userQuestion: string): Promise<string> {
+async function directNormalize(userQuestion: string, signal?: AbortSignal): Promise<string> {
   try {
     const response = await groqClient.chat.completions.create({
-      model: 'qwen/qwen3.8-27b',
+      model: settings.groqModel,
       messages: [
         { role: 'system', content: 'Você é um especialista em terminologia de Vigilância Sanitária. Reescreva a pergunta do usuário em uma consulta técnica curta e direta, de no máximo 15 palavras, focada em legislação.' },
         { role: 'user', content: userQuestion },
       ],
       temperature: 0.0,
       max_tokens: 60,
-    });
+    }, { signal });
     const result = response.choices[0]?.message?.content?.trim();
     return (result && result.length < 200) ? result : userQuestion;
   } catch {
+    signal?.throwIfAborted();
     return userQuestion;
   }
 }

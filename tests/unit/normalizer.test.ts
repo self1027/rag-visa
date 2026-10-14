@@ -321,7 +321,7 @@ describe('analyzeAndNormalizeQuery', () => {
             expect.objectContaining({ role: 'system' }),
             expect.objectContaining({ role: 'user' }),
           ]),
-        })
+        }), { signal: undefined }
       );
     });
 
@@ -343,7 +343,7 @@ describe('analyzeAndNormalizeQuery', () => {
             expect.objectContaining({ role: 'system', content: expect.stringContaining('Vigilância Sanitária') }),
             expect.objectContaining({ role: 'user', content: 'Pergunta única' }),
           ]),
-        })
+        }), { signal: undefined }
       );
     });
   });
