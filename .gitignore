@@ -1,5 +1,29 @@
-qdrant_storage/
+# Dependencies and generated builds
 node_modules/
-package-lock.json
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Local credentials (keep the configuration template)
 .env
-data/database.sqlite
+.env.*
+!.env.example
+
+# Runtime storage, uploaded PDFs and generated evaluation reports
+/data/
+/qdrant_storage/
+/reports/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+
+# Logs, caches and local editor/OS files
+*.log
+.cache/
+.tmp/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
