@@ -35,7 +35,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
     "multer": "^2.4.0",
-    "ollama": "^0.6.3",
+    "ollama": "^0.6.4",
     "openai": "^7.23.0",
     "pdf-parse-new": "^2.1.0",
     "uuid": "^14.0.2"
