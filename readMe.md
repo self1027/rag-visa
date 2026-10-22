@@ -8,21 +8,21 @@ O projeto inclui cadastro de documentos, ingestão assíncrona com progresso, ch
 
 - Node.js 24, TypeScript e Express 5.
 - SQLite e Drizzle para metadados, fila de ingestão e evidências das conversas.
-- Qdrant para busca vetorial e Ollama com `bge-m3` para embeddings locais.
-- Groq para normalização das perguntas e geração das respostas.
+- Qdrant para busca vetorial e Ollama com modelo configurável para embeddings locais.
+- Endpoint compatível com OpenAI para normalização e geração, configurado por ambiente.
 
-Os PDFs e embeddings ficam na infraestrutura local. O histórico enviado ao chat e os trechos usados na resposta são enviados à Groq.
+Os PDFs e embeddings ficam na infraestrutura local. O histórico enviado ao chat e os trechos usados na resposta são enviados ao endpoint de IA configurado.
 
 ## Executar localmente
 
-Requisitos: Node.js 24, npm, Docker com Compose e uma chave da Groq.
+Requisitos: Node.js 24, npm, Docker com Compose e acesso a um endpoint de IA compatível com OpenAI.
 
 ```bash
 npm ci
 cp .env.example .env
 ```
 
-Preencha `GROQ_API_KEY` no `.env`. Em seguida:
+Configure `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` e `EMBEDDING_MODEL` no `.env`. Groq e `bge-m3` são exemplos substituíveis. Para manter o exemplo:
 
 ```bash
 docker compose up -d
@@ -37,7 +37,7 @@ curl http://localhost:3333/api/health
 curl http://localhost:3333/api/ready
 ```
 
-`health` verifica se a API está respondendo; `ready` verifica Qdrant e a disponibilidade do modelo no Ollama. A chave e o acesso à Groq precisam funcionar para o chat.
+`health` verifica se a API está respondendo; `ready` verifica Qdrant e a disponibilidade do modelo no Ollama. A credencial e o endpoint de IA precisam funcionar para o chat.
 
 ## Cadastrar um PDF
 
@@ -93,3 +93,7 @@ A documentação é escrita em **Markdown e versionada junto com o código**, se
 A configuração atual permite acesso aberto na intranet: `ADMIN_API_TOKEN` e `CORS_ORIGINS` vazios. Essas opções podem ser restringidas futuramente. Nenhuma jurisdição municipal é aplicada automaticamente; os filtros são enviados pelo cliente.
 
 As respostas dependem das normas cadastradas. A vigência desconhecida permanece explícita e a qualidade jurídica deve ser revisada com casos representativos antes de usar o sistema como base de decisão.
+
+## Desenvolvimento e mapa do código
+
+Aplicamos a skill [Ponytail](https://github.com/DietrichGebert/ponytail): reutilizar o existente, reduzir duplicação e validar cada mudança. O [Graphify](https://github.com/Graphify-Labs/graphify) é a fonte de consulta das relações entre arquivos. Consulte o [fluxo de manutenção](docs/development.md) para instalar as ferramentas, atualizar e consultar o grafo.

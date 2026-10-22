@@ -12,7 +12,7 @@ flowchart LR
     API --> RAG[Normalização, busca e geração]
     RAG --> Ollama
     RAG --> Qdrant
-    RAG --> Groq[Groq: modelo de linguagem]
+    RAG --> LLM[Endpoint de IA configurado]
     RAG --> DB
 ```
 
@@ -45,13 +45,13 @@ Tarefas interrompidas são recuperadas após a concessão expirar. Vários worke
 
 ## Consulta e conversa
 
-O cliente envia o histórico. A normalização da pergunta usa a Groq; a busca usa embeddings do Ollama e o Qdrant; a geração transmite o texto pela Groq. Normas marcadas como revogadas e vetores não publicados são excluídos da recuperação.
+O cliente envia o histórico. A normalização da pergunta usa o endpoint de IA configurado; a busca usa embeddings do Ollama e o Qdrant; a geração transmite o texto pelo endpoint de IA configurado. Normas marcadas como revogadas e vetores não publicados são excluídos da recuperação.
 
 O cliente pode filtrar esfera e jurisdição. A preferência municipal depende de um pedido explícito e de uma jurisdição informada. Documentos antigos sem jurisdição precisam de atualização e reindexação para participar corretamente desses filtros.
 
 O SQLite persiste as evidências da conversa com prazo de expiração, mas não guarda o histórico completo. O frontend deve continuar enviando `history` e conservar o `conversationId` retornado. Perguntas técnicas de acompanhamento executam nova busca; pedidos de reformatação podem reutilizar evidências depois de validar sua existência no Qdrant.
 
-PDFs e embeddings são locais. Histórico e trechos relevantes passam pela Groq, um serviço externo. Quando não há evidências recuperadas, o sistema informa que não encontrou embasamento na legislação cadastrada.
+PDFs e embeddings são locais. Histórico e trechos relevantes passam pelo endpoint de IA configurado, que pode ser local ou externo. Quando não há evidências recuperadas, o sistema informa que não encontrou embasamento na legislação cadastrada.
 
 ## Limites atuais
 

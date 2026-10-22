@@ -8,7 +8,7 @@ npm run typecheck
 npm test
 ```
 
-Os testes unitários e de integração usam dependências externas simuladas. O teste com serviços reais fica desabilitado na suíte padrão. A [integração contínua](../.github/workflows/checks.yml) executa instalação, verificação de tipos e testes; ela não executa a avaliação com Groq nem a ingestão real.
+Os testes unitários e de integração usam dependências externas simuladas. O teste com serviços reais fica desabilitado na suíte padrão. A [integração contínua](../.github/workflows/checks.yml) executa instalação, verificação de tipos e testes; ela não executa a avaliação com endpoint de IA configurado nem a ingestão real.
 
 Com Qdrant, Ollama e `bge-m3` disponíveis:
 
@@ -16,7 +16,7 @@ Com Qdrant, Ollama e `bge-m3` disponíveis:
 npm run test:live
 ```
 
-O teste real usa uma coleção e armazenamento temporários, executa workers em processos separados e verifica recuperação após interrupção de um deles. Remove os recursos próprios ao finalizar. Não faz chamadas à Groq; sua duração depende do desempenho local do modelo.
+O teste real usa uma coleção e armazenamento temporários, executa workers em processos separados e verifica recuperação após interrupção de um deles. Remove os recursos próprios ao finalizar. Não faz chamadas ao endpoint de IA configurado; sua duração depende do desempenho local do modelo.
 
 ## Avaliação da recuperação
 
@@ -36,7 +36,7 @@ Métricas incluem presença das fontes esperadas entre os primeiros resultados, 
 npm run eval:rag -- --generate
 ```
 
-Esse modo também chama a Groq e consome sua cota. Grava `reports/rag-generation.json` com respostas e verificações de citação, cobertura de termos e recusa quando não há evidência. A implementação está em [run.ts](../src/evaluation/run.ts) e [metrics.ts](../src/evaluation/metrics.ts).
+Esse modo também chama o endpoint de IA configurado e consome sua cota. Grava `reports/rag-generation.json` com respostas e verificações de citação, cobertura de termos e recusa quando não há evidência. A implementação está em [run.ts](../src/evaluation/run.ts) e [metrics.ts](../src/evaluation/metrics.ts).
 
 A validade de uma citação numérica verifica se seu identificador corresponde a uma fonte recuperada; não verifica se o trecho sustenta juridicamente a afirmação. Ausência de citações numéricas deve ser analisada separadamente. Relatórios de execuções anteriores podem não conter campos adicionados posteriormente ao avaliador.
 

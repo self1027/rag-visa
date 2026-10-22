@@ -37,7 +37,7 @@ docker compose -f docker-compose.yml -f docker-compose.app.yml logs --tail=100 a
 | Sintoma | Verificação |
 | --- | --- |
 | `/api/ready` retorna `503` | Conferir Qdrant, Ollama, URLs e presença do modelo em `ollama list` |
-| Chat falha com serviços locais prontos | Conferir chave, disponibilidade do modelo e conexão com a Groq |
+| Chat falha com serviços locais prontos | Conferir chave, disponibilidade do modelo e conexão com o endpoint de IA configurado |
 | Documento permanece `queued` | Confirmar worker ativo e acesso ao mesmo SQLite e diretório de PDFs |
 | Documento ficou `processing` após uma queda | Aguardar expiração da concessão; worker ativo recupera a tarefa |
 | Ingestão `failed` | Consultar `ingestion.error`, logs, camada de texto do PDF e serviços; tentar novamente pela API |
@@ -45,7 +45,7 @@ docker compose -f docker-compose.yml -f docker-compose.app.yml logs --tail=100 a
 | Busca não encontra documento | Conferir conclusão, vigência, filtros, metadados e limiar de similaridade |
 | Erro de permissão em Docker | Conferir permissões de `data` para UID 1000 |
 
-`GET /api/health` mede apenas a resposta da API. `GET /api/ready` verifica Qdrant e o modelo no Ollama; não valida Groq nem compatibilidade de dimensões. `GET /api/metrics` expõe contagem de requisições, erros HTTP 5xx, duração acumulada e jobs por estado. Métricas HTTP são locais ao processo e reiniciam com ele; o endpoint não usa formato Prometheus.
+`GET /api/health` mede apenas a resposta da API. `GET /api/ready` verifica Qdrant e o modelo no Ollama; não valido endpoint de IA configurado nem compatibilidade de dimensões. `GET /api/metrics` expõe contagem de requisições, erros HTTP 5xx, duração acumulada e jobs por estado. Métricas HTTP são locais ao processo e reiniciam com ele; o endpoint não usa formato Prometheus.
 
 A API retorna `X-Request-Id` para correlacionar chamadas com os logs. Há eventos de duração de HTTP, RAG e ingestão. O timeout do chat e a desconexão do cliente interrompem o fluxo; chamadas externas também possuem seus próprios limites de duração.
 

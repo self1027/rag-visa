@@ -4,6 +4,7 @@
 
 | Página | Quando consultar |
 | --- | --- |
+| [Desenvolvimento](development.md) | Usar Ponytail, consultar Graphify e atualizar dependências |
 | [Arquitetura](architecture.md) | Entender componentes, ingestão, busca e armazenamento |
 | [API](api.md) | Integrar cadastro, barra de progresso e chat no frontend |
 | [Configuração](configuration.md) | Preparar variáveis de ambiente e limites |
