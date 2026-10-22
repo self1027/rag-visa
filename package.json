@@ -15,7 +15,12 @@
     "worker": "tsx src/ingestion/worker.ts",
     "test:live": "RUN_LIVE_TESTS=1 vitest run tests/live",
     "eval:rag": "tsx src/evaluation/run.ts",
-    "start": "tsx src/server.ts"
+    "start": "tsx src/server.ts",
+    "graph:update": "GRAPHIFY_BACKEND=none graphify extract . --code-only --force",
+    "pregraph:query": "npm run graph:update",
+    "graph:query": "GRAPHIFY_BACKEND=none graphify query",
+    "pregraph:watch": "npm run graph:update",
+    "graph:watch": "GRAPHIFY_BACKEND=none graphify watch ."
   },
   "keywords": [],
   "author": "",

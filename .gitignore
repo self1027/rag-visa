@@ -27,3 +27,8 @@ coverage/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Grafo e cache derivados, reconstruídos localmente e no CI
+graphify-out/
+
+.tools/venv/
