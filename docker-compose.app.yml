@@ -1,14 +1,17 @@
 # Optional API + workers. Use with docker-compose.yml; shared local storage is required.
 services:
   api:
-    build: .
+    build:
+      context: .
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24.21.0@sha256:9af606de2e947cfb3f276633b7c5130c4cd22365aa10f5a647b7675d5cfce0c0}
     restart: unless-stopped
     ports:
-      - "3333:3333"
+      - "${PORT:-3333}:${PORT:-3333}"
     env_file: .env
     environment:
-      QDRANT_URL: http://qdrant:6333
-      OLLAMA_URL: http://ollama:11434
+      QDRANT_URL: ${QDRANT_DOCKER_URL:-http://qdrant:6333}
+      OLLAMA_URL: ${OLLAMA_DOCKER_URL:-http://ollama:11434}
       INGESTION_WORKER_IN_API: 'false'
       DATABASE_PATH: /app/data/database.sqlite
       PDF_DIR: /app/data/pdfs
@@ -17,13 +20,16 @@ services:
     networks: [rag-network]
     depends_on: [qdrant, ollama]
   worker:
-    build: .
+    build:
+      context: .
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24.21.0@sha256:9af606de2e947cfb3f276633b7c5130c4cd22365aa10f5a647b7675d5cfce0c0}
     restart: unless-stopped
     command: ["npm", "run", "worker"]
     env_file: .env
     environment:
-      QDRANT_URL: http://qdrant:6333
-      OLLAMA_URL: http://ollama:11434
+      QDRANT_URL: ${QDRANT_DOCKER_URL:-http://qdrant:6333}
+      OLLAMA_URL: ${OLLAMA_DOCKER_URL:-http://ollama:11434}
       DATABASE_PATH: /app/data/database.sqlite
       PDF_DIR: /app/data/pdfs
     volumes:
