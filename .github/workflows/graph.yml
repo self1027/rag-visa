@@ -19,7 +19,7 @@ jobs:
       - run: graphify extract . --code-only
         env:
           GRAPHIFY_BACKEND: none
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: knowledge-graph
           path: graphify-out/graph.json
