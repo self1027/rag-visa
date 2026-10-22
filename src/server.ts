@@ -19,7 +19,7 @@ import { askRAG, ChatMessage } from './rag/generator.js';
 import { chatLimiter } from './middleware/rateLimiter.js';
 import { enforceTokenLimit } from './middleware/tokenLimiter.js';
 
-export const PDF_DIR = path.resolve(process.env.PDF_DIR || path.join('data', 'pdfs'));
+export const PDF_DIR = settings.pdfDir;
 const PORT = settings.port;
 
 export function createApp(customDb?: typeof db, customPdfDir?: string, customChatLimiter?: express.RequestHandler, customIngestion?: IngestionService): Express {

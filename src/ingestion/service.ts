@@ -31,7 +31,7 @@ export function createIngestionService(database: typeof db, pdfDir: string, inge
   const leaseMs = options.leaseMs || settings.workerLeaseMs;
   let running = false; let stopped = false;
   const waiters: Array<() => void> = [];
-  const worker = options.worker ?? process.env.INGESTION_WORKER_IN_API !== 'false';
+  const worker = options.worker ?? settings.ingestionWorkerInApi;
   const state = (filename: string) => database.select().from(jobs).where(eq(jobs.filename, filename)).get();
   const eligible = () => or(eq(jobs.status, 'queued'), and(eq(jobs.status, 'processing'), or(isNull(jobs.leaseUntil), lte(jobs.leaseUntil, Date.now()))));
   function schedule() {

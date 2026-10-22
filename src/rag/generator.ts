@@ -1,21 +1,9 @@
 import { log } from '../observability/index.js';
 import { settings } from '../config/settings.js';
-import 'dotenv/config';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
+import { getLlmClient } from '../config/llm.js';
 import { searchLegislacao, type SearchResult, type SearchOptions } from '../retriever/search.js';
 import { analyzeAndNormalizeQuery } from './normalizer.js';
-
-const apiKey = process.env.GROQ_API_KEY;
-if (!apiKey) {
-  throw new Error('A chave GROQ_API_KEY não foi encontrada no arquivo .env');
-}
-
-const groqClient = new OpenAI({
-  baseURL: 'https://api.groq.com/openai/v1',
-  apiKey: apiKey,
-  timeout: settings.requestTimeoutMs,
-  maxRetries: 1,
-});
 
 const SYSTEM_PROMPT = `Você é um assistente especializado em Vigilância Sanitária (VISA).
 Sua tarefa é responder a dúvidas de fiscais e munícipes com base nos trechos da legislação fornecidos no contexto ou gerenciar o fluxo da conversa.
@@ -77,7 +65,7 @@ export async function askRAG(
       }).join('\n\n')
     : (needsSearch ? "Nenhum trecho específico encontrado na base para esta consulta." : "Utilize o contexto da legislação discutida nas mensagens anteriores.");
 
-  const messagesForGroq: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+  const messagesForLlm: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: 'system', content: SYSTEM_PROMPT },
     ...history.slice(0, -1).map(m => ({ role: m.role, content: m.content })),
     { 
@@ -86,9 +74,9 @@ export async function askRAG(
     }
   ];
 
-  const responseStream = await groqClient.chat.completions.create({
-    model: settings.groqModel,
-    messages: messagesForGroq,
+  const responseStream = await getLlmClient().chat.completions.create({
+    model: settings.llmModel,
+    messages: messagesForLlm,
     temperature: 0.1,
     max_tokens: settings.maxResponseTokens,
     stream: true,

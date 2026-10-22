@@ -14,6 +14,7 @@ const EMBEDDING_MODEL = settings.embeddingModel;
 
 export async function generateEmbedding(text: string, signal?: AbortSignal): Promise<number[]> {
   signal?.throwIfAborted();
+  if (!EMBEDDING_MODEL) throw new Error('Configure EMBEDDING_MODEL.');
   const cleanText = text?.trim();
 
   if (!cleanText) {
@@ -25,7 +26,7 @@ export async function generateEmbedding(text: string, signal?: AbortSignal): Pro
       model: EMBEDDING_MODEL,
       prompt: cleanText,
       options: {
-        num_ctx: 8192,
+        num_ctx: settings.embeddingContextTokens,
       },
     });
 

@@ -60,7 +60,7 @@ export async function ingestDocument(document: DocumentMetadata, pdfDir: string,
   report({ phase: 'chunking', progress: 5 });
   const chunks = chunkLegislacao(parsed.text, document.filename);
   if (!chunks.length) throw new Error('Nenhum trecho de texto foi extraído do PDF.');
-  const version = createHash('sha256').update(buffer).update(JSON.stringify(document)).update(`chunker-v2:${settings.embeddingModel}`).digest('hex');
+  const version = createHash('sha256').update(buffer).update(JSON.stringify(document)).update(JSON.stringify(['chunker-v3', settings.embeddingModel, settings.embeddingDimensions, settings.embeddingContextTokens, settings.chunkMaxLength, settings.chunkOverlap])).digest('hex');
   const versionFilter = { must: [
     { key: 'filename', match: { value: document.filename } },
     { key: 'version', match: { value: version } },
@@ -83,9 +83,9 @@ export async function ingestDocument(document: DocumentMetadata, pdfDir: string,
   let published = false;
   try {
     report({ phase: 'embedding', progress: 10, totalChunks: chunks.length });
-    for (let offset = 0; offset < chunks.length; offset += 25) {
+    for (let offset = 0; offset < chunks.length; offset += settings.ingestionBatchSize) {
       const batch = [];
-      for (let index = offset; index < Math.min(offset + 25, chunks.length); index++) {
+      for (let index = offset; index < Math.min(offset + settings.ingestionBatchSize, chunks.length); index++) {
         const chunk = chunks[index];
         const vector = await generateEmbedding(chunk.content);
         if (vector.length !== settings.embeddingDimensions || vector.some(value => !Number.isFinite(value))) {

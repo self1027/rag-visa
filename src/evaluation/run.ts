@@ -29,7 +29,7 @@ async function run() {
       meanReciprocalRank: positives.reduce((sum, row) => sum + row.reciprocalRank, 0) / positives.length, rows });
   }
   fs.mkdirSync('reports', { recursive: true });
-  fs.writeFileSync(generate ? 'reports/rag-generation.json' : 'reports/rag-evaluation.json', JSON.stringify({ timestamp: new Date().toISOString(), model: settings.groqModel,
+  fs.writeFileSync(generate ? 'reports/rag-generation.json' : 'reports/rag-evaluation.json', JSON.stringify({ timestamp: new Date().toISOString(), model: settings.llmModel,
     note: 'Fixture inicial baseada nos PDFs locais. Validade de referências e cobertura lexical não medem correção jurídica ou suporte de cada afirmação; revisão especializada é necessária.', results }, null, 2));
   console.log(JSON.stringify(results.map(({ rows: _rows, ...summary }) => summary), null, 2));
 }

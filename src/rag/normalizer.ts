@@ -1,19 +1,6 @@
 import { log } from '../observability/index.js';
 import { settings } from '../config/settings.js';
-import 'dotenv/config';
-import OpenAI from 'openai';
-
-const apiKey = process.env.GROQ_API_KEY;
-if (!apiKey) {
-  throw new Error('A chave GROQ_API_KEY não foi encontrada no arquivo .env');
-}
-
-const groqClient = new OpenAI({
-  baseURL: 'https://api.groq.com/openai/v1',
-  apiKey: apiKey,
-  timeout: settings.requestTimeoutMs,
-  maxRetries: 1,
-});
+import { getLlmClient } from '../config/llm.js';
 
 const ROUTER_NORMALIZER_PROMPT = `Você é um analisador JSON estrito para um sistema RAG de Vigilância Sanitária.
 Sua ÚNICA função é retornar um objeto JSON válido, sem NENHUM texto adicional, sem saudações e sem blocos de markdown (\`\`\`json).
@@ -43,8 +30,8 @@ export async function analyzeAndNormalizeQuery(history: Array<{ role: string; co
     const lastUserMessage = history[history.length - 1].content;
     const previousAssistantMessage = history[history.length - 2]?.content || '';
 
-    const response = await groqClient.chat.completions.create({
-      model: settings.groqModel,
+    const response = await getLlmClient().chat.completions.create({
+      model: settings.llmModel,
       messages: [
         { role: 'system', content: ROUTER_NORMALIZER_PROMPT },
         { 
@@ -90,8 +77,8 @@ export async function analyzeAndNormalizeQuery(history: Array<{ role: string; co
 
 async function directNormalize(userQuestion: string, signal?: AbortSignal): Promise<string> {
   try {
-    const response = await groqClient.chat.completions.create({
-      model: settings.groqModel,
+    const response = await getLlmClient().chat.completions.create({
+      model: settings.llmModel,
       messages: [
         { role: 'system', content: 'Você é um especialista em terminologia de Vigilância Sanitária. Reescreva a pergunta do usuário em uma consulta técnica curta e direta, de no máximo 15 palavras, focada em legislação.' },
         { role: 'user', content: userQuestion },

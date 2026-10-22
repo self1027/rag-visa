@@ -11,6 +11,9 @@ import path from 'path';
 
 // Mock environment variables BEFORE any module imports
 process.env.GROQ_API_KEY = 'test-groq-api-key';
+process.env.LLM_BASE_URL = 'https://llm.test/v1';
+process.env.LLM_MODEL = 'qwen/qwen3.8-27b';
+process.env.EMBEDDING_MODEL = 'bge-m3';
 process.env.OLLAMA_URL = 'http://localhost:11434';
 process.env.PORT = '3333';
 

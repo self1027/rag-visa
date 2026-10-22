@@ -1,15 +1,11 @@
+import { settings } from '../config/settings.js';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { migrateDatabase } from './migrate.js';
 
-const dataDir = path.join(process.cwd(), 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const databasePath = process.env.DATABASE_PATH || path.join(dataDir, 'database.sqlite');
+const databasePath = settings.databasePath;
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 const sqlite = new Database(databasePath);
 sqlite.pragma('busy_timeout = 5000');

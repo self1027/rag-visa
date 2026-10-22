@@ -3,6 +3,7 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 
 export const qdrantClient = new QdrantClient({
   url: settings.qdrantUrl,
+  apiKey: settings.qdrantApiKey,
   timeout: settings.requestTimeoutMs,
 });
 
@@ -19,7 +20,7 @@ export async function setupQdrantCollection() {
       console.log(`🚀 Criando coleção '${COLLECTION_NAME}' no Qdrant...`);
       await qdrantClient.createCollection(COLLECTION_NAME, {
         vectors: {
-          size: settings.embeddingDimensions, // Native dimension of bge-m3
+          size: settings.embeddingDimensions,
           distance: 'Cosine',
         },
       });

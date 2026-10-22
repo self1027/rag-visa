@@ -1,3 +1,5 @@
+import { settings } from '../config/settings.js';
+
 export interface DocumentChunk {
   content: string;
   metadata: {
@@ -15,8 +17,8 @@ export interface DocumentChunk {
 }
 
 // Safe limit in characters (~600 tokens) to avoid overflowing the model's context window
-const MAX_CHUNK_LENGTH = 2500;
-const OVERLAP_LENGTH = 300;
+const MAX_CHUNK_LENGTH = settings.chunkMaxLength;
+const OVERLAP_LENGTH = settings.chunkOverlap;
 
 /**
  * Splits texts that exceed the size limit into smaller sub-chunks
@@ -29,7 +31,7 @@ function splitLargeChunk(
   overlap: number = OVERLAP_LENGTH
 ): string[] {
   const result: string[] = [];
-  const headerPrefix = contextHeader ? `[${contextHeader.slice(0, 500)}]\n` : '';
+  const headerPrefix = contextHeader ? `[${contextHeader.slice(0, Math.min(500, maxLength - overlap - 4))}]\n` : '';
   const effectiveMax = Math.max(overlap + 1, maxLength - headerPrefix.length);
 
   let start = 0;
@@ -39,7 +41,7 @@ function splitLargeChunk(
     // If not at the end of the text, look for the last line break to avoid cutting sentences/paragraphs
     if (end < text.length) {
       const lastNewLine = text.lastIndexOf('\n', end);
-      if (lastNewLine > start + effectiveMax * 0.5) {
+      if (lastNewLine > start + Math.max(overlap, effectiveMax * 0.5)) {
         end = lastNewLine;
       }
     }

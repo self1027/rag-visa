@@ -1,8 +1,9 @@
+import { settings } from '../config/settings.js';
 import rateLimit from 'express-rate-limit';
 
 export const chatLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 5, // 5 requests per minute
+  windowMs: settings.rateLimitWindowMs,
+  max: settings.rateLimitMax,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

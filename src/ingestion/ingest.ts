@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import { settings } from '../config/settings.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +7,7 @@ import { documentsTable, documentIngestionsTable } from '../db/schema.js';
 import { createIngestionService } from './service.js';
 
 // The CLI and HTTP uploads share the same pipeline and persisted progress.
-export async function processPdfs(pdfDir = path.join(process.cwd(), 'data', 'pdfs')) {
+export async function processPdfs(pdfDir = settings.pdfDir) {
   fs.mkdirSync(pdfDir, { recursive: true });
   const documents = db.select().from(documentsTable).all();
   const filenames = new Set(documents.map(document => document.filename));
