@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { extractPdf, locatePages } from './pdf.js';
 import { settings } from '../config/settings.js';
-import { qdrantClient, COLLECTION_NAME, setupQdrantCollection } from '../config/qdrant.js';
+import { qdrantClient, getCollectionName, setupQdrantCollection } from '../config/qdrant.js';
 import { generateEmbedding } from '../config/ollama.js';
 import { chunkLegislacao } from '../utils/chunker.js';
 import { documentsTable } from '../db/schema.js';
@@ -32,6 +32,7 @@ export function documentFilter(document: DocumentMetadata, legacySource?: string
 }
 
 export async function removeDocumentVectors(document: DocumentMetadata, legacySource?: string | null) {
+  const COLLECTION_NAME = getCollectionName();
   const { exists } = await qdrantClient.collectionExists(COLLECTION_NAME);
   if (exists) {
     await qdrantClient.delete(COLLECTION_NAME, { wait: true, filter: documentFilter(document, legacySource) });
@@ -45,6 +46,7 @@ function pointId(filename: string, version: string, index: number) {
 }
 
 export async function ingestDocument(document: DocumentMetadata, pdfDir: string, onProgress: ProgressCallback, legacySource?: string | null) {
+  const COLLECTION_NAME = getCollectionName();
   const progress: IngestionProgress = {
     phase: 'extracting', progress: 2, totalChunks: 0, embeddedChunks: 0, indexedChunks: 0,
   };
@@ -60,7 +62,7 @@ export async function ingestDocument(document: DocumentMetadata, pdfDir: string,
   report({ phase: 'chunking', progress: 5 });
   const chunks = chunkLegislacao(parsed.text, document.filename);
   if (!chunks.length) throw new Error('Nenhum trecho de texto foi extraído do PDF.');
-  const version = createHash('sha256').update(buffer).update(JSON.stringify(document)).update(JSON.stringify(['chunker-v3', settings.embeddingModel, settings.embeddingDimensions, settings.embeddingContextTokens, settings.chunkMaxLength, settings.chunkOverlap])).digest('hex');
+  const version = createHash('sha256').update(buffer).update(JSON.stringify(document)).update(JSON.stringify(['chunker-v3', settings.embeddingProvider, settings.embeddingModel, settings.embeddingRevision, settings.embeddingDocumentPrefix, settings.embeddingQueryPrefix, settings.embeddingDimensions, settings.embeddingContextTokens, settings.chunkMaxLength, settings.chunkOverlap])).digest('hex');
   const versionFilter = { must: [
     { key: 'filename', match: { value: document.filename } },
     { key: 'version', match: { value: version } },

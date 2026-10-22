@@ -2,13 +2,13 @@
 
 API para consultar normas de vigilância sanitária a partir de PDFs cadastrados. O sistema extrai o texto, gera embeddings, busca trechos relevantes e transmite respostas com referências para o documento e a página, quando identificada.
 
-O projeto inclui cadastro de documentos, ingestão assíncrona com progresso, chat por SSE e avaliação da recuperação. O frontend deve ser implementado separadamente.
+O projeto inclui cadastro de documentos, ingestão assíncrona com progresso, chat por SSE e avaliação da recuperação. A interface administrativa é HTML, CSS e JavaScript estáticos, servidos pela própria API em `/`, sem EJS nem build.
 
 ## Tecnologias
 
 - Node.js 24, TypeScript e Express 5.
 - SQLite e Drizzle para metadados, fila de ingestão e evidências das conversas.
-- Qdrant para busca vetorial e Ollama com modelo configurável para embeddings locais.
+- Qdrant para busca vetorial e embeddings locais via Sentence Transformers ou Ollama.
 - Endpoint compatível com OpenAI para normalização e geração, configurado por ambiente.
 
 Os PDFs e embeddings ficam na infraestrutura local. O histórico enviado ao chat e os trechos usados na resposta são enviados ao endpoint de IA configurado.
@@ -22,22 +22,21 @@ npm ci
 cp .env.example .env
 ```
 
-Configure `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` e `EMBEDDING_MODEL` no `.env`. Groq e `bge-m3` são exemplos substituíveis. Para manter o exemplo:
+Configure `LLM_BASE_URL`, `LLM_API_KEY` e `LLM_MODEL` no `.env`. O exemplo usa EmbeddingGemma PT-BR em um serviço Python; baixe os pesos conforme [modelos locais](docs/local-models.md#reinstalar). Para manter o exemplo:
 
 ```bash
-docker compose up -d
-docker compose exec ollama ollama pull bge-m3
+docker compose up -d --build embeddings qdrant
 npm run dev:server
 ```
 
-A API atende em `http://localhost:3333`. Por padrão, o worker de ingestão roda junto com a API.
+Abra `http://localhost:3333` para gerenciar PDFs e parâmetros da IA. A API atende no mesmo endereço. Por padrão, o worker de ingestão roda junto com a API.
 
 ```bash
 curl http://localhost:3333/api/health
 curl http://localhost:3333/api/ready
 ```
 
-`health` verifica se a API está respondendo; `ready` verifica Qdrant e a disponibilidade do modelo no Ollama. A credencial e o endpoint de IA precisam funcionar para o chat.
+`health` verifica se a API está respondendo; `ready` verifica Qdrant e o provedor de embeddings configurado. A credencial e o endpoint de IA precisam funcionar para o chat.
 
 ## Cadastrar um PDF
 

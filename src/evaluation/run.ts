@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { searchLegislacao } from '../retriever/search.js';
 import { askRAG } from '../rag/generator.js';
-import { settings } from '../config/settings.js';
+import { settings, withEmbeddingConfig } from '../config/settings.js';
+import { getSelectedEmbedder } from '../config/embeddingProfiles.js';
+import { db } from '../db/index.js';
 import { evaluateRetrieval, evaluateAnswer, type EvaluationCase } from './metrics.js';
 async function run() {
   const cases = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src/evaluation/cases.json'), 'utf8')) as EvaluationCase[];
@@ -33,4 +35,4 @@ async function run() {
     note: 'Fixture inicial baseada nos PDFs locais. Validade de referências e cobertura lexical não medem correção jurídica ou suporte de cada afirmação; revisão especializada é necessária.', results }, null, 2));
   console.log(JSON.stringify(results.map(({ rows: _rows, ...summary }) => summary), null, 2));
 }
-run().catch(error => { console.error(error); process.exitCode = 1; });
+withEmbeddingConfig(getSelectedEmbedder(db), run).catch(error => { console.error(error); process.exitCode = 1; });

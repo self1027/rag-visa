@@ -12,13 +12,18 @@ services:
     environment:
       QDRANT_URL: ${QDRANT_DOCKER_URL:-http://qdrant:6333}
       OLLAMA_URL: ${OLLAMA_DOCKER_URL:-http://ollama:11434}
+      EMBEDDING_URL: ${EMBEDDING_DOCKER_URL:-http://embeddings:${EMBEDDING_PORT:-8001}}
+      EMBEDDING_PROFILES: ${EMBEDDING_DOCKER_PROFILES:-[]}
       INGESTION_WORKER_IN_API: 'false'
       DATABASE_PATH: /app/data/database.sqlite
       PDF_DIR: /app/data/pdfs
     volumes:
       - ./data:/app/data
     networks: [rag-network]
-    depends_on: [qdrant, ollama]
+    depends_on:
+      qdrant: { condition: service_started }
+      ollama: { condition: service_started }
+      embeddings: { condition: service_healthy, required: false }
   worker:
     build:
       context: .
@@ -30,9 +35,14 @@ services:
     environment:
       QDRANT_URL: ${QDRANT_DOCKER_URL:-http://qdrant:6333}
       OLLAMA_URL: ${OLLAMA_DOCKER_URL:-http://ollama:11434}
+      EMBEDDING_URL: ${EMBEDDING_DOCKER_URL:-http://embeddings:${EMBEDDING_PORT:-8001}}
+      EMBEDDING_PROFILES: ${EMBEDDING_DOCKER_PROFILES:-[]}
       DATABASE_PATH: /app/data/database.sqlite
       PDF_DIR: /app/data/pdfs
     volumes:
       - ./data:/app/data
     networks: [rag-network]
-    depends_on: [qdrant, ollama]
+    depends_on:
+      qdrant: { condition: service_started }
+      ollama: { condition: service_started }
+      embeddings: { condition: service_healthy, required: false }

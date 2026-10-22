@@ -1,6 +1,10 @@
-import { qdrantClient, COLLECTION_NAME } from './config/qdrant.js';
+import { qdrantClient, getCollectionName } from './config/qdrant.js';
+import { withEmbeddingConfig } from './config/settings.js';
+import { getSelectedEmbedder } from './config/embeddingProfiles.js';
+import { db } from './db/index.js';
 
 async function inspectQdrant() {
+  const COLLECTION_NAME = getCollectionName();
   console.log('🔍 Inspecionando a coleção do Qdrant...\n');
 
   try {
@@ -30,4 +34,4 @@ async function inspectQdrant() {
   }
 }
 
-inspectQdrant();
+withEmbeddingConfig(getSelectedEmbedder(db), inspectQdrant);

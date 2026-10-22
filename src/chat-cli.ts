@@ -2,6 +2,9 @@ import 'dotenv/config';
 import readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'process';
 import { askRAG, ChatMessage } from './rag/generator.js';
+import { withEmbeddingConfig } from './config/settings.js';
+import { getSelectedEmbedder } from './config/embeddingProfiles.js';
+import { db } from './db/index.js';
 
 export async function runChatCLI(
   customInput = input,
@@ -34,9 +37,9 @@ export async function runChatCLI(
 
       try {
         // Send the full history to RAG
-        const result = await customAskRAG(chatHistory, (chunk) => {
+        const result = await withEmbeddingConfig(getSelectedEmbedder(db), () => customAskRAG(chatHistory, (chunk) => {
           customOutput.write(chunk);
-        });
+        }));
 
         // Add the AI response to the history to keep memory for the next questions
         chatHistory.push({ role: 'assistant', content: result.answer });

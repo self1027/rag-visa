@@ -20,7 +20,8 @@ export function saveConversation(database: typeof db, id: string, evidence: Sear
 // Revalidate IDs before reusing excerpts: deleted/replaced/revoked points cannot ground a follow-up.
 export async function refreshEvidence(evidence: SearchResult[]) {
   if (!evidence.length) return [];
-  const { qdrantClient, COLLECTION_NAME } = await import('../config/qdrant.js');
+  const { qdrantClient, getCollectionName } = await import('../config/qdrant.js');
+  const COLLECTION_NAME = getCollectionName();
   const ids = evidence.flatMap(hit => hit.id === undefined ? [] : [hit.id]);
   if (!ids.length) return [];
   const points = await qdrantClient.retrieve(COLLECTION_NAME, { ids, with_payload: true });

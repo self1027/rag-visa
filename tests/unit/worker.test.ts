@@ -4,7 +4,32 @@ import { migrateDatabase } from '../../src/db/migrate.js';
 import { documentsTable, documentIngestionsTable } from '../../src/db/schema.js';
 import { createIngestionService } from '../../src/ingestion/service.js';
 const resources: Array<() => void> = [];
-afterEach(() => { for (const cleanup of resources.splice(0)) cleanup(); });
+it('keeps an in-flight job on its model and requeues it after a selection change', async () => {
+  const { settings } = await import('../../src/config/settings.js');
+  const { getEmbeddingProfiles, saveSelectedEmbedder } = await import('../../src/config/embeddingProfiles.js');
+  const { db, sqlite } = createTestDb();
+  const original = getEmbeddingProfiles()[0];
+  vi.stubEnv('EMBEDDING_PROFILES', JSON.stringify([{ ...original, id: 'other', label: 'Other', embeddingModel: 'other-model', collection: 'other_collection' }]));
+  db.insert(documentsTable).values({ filename: 'switch.pdf', titulo: 'Test', esfera: 'federal', tipo: 'legislacao', ano: 2024, orgao: 'Test' }).run();
+  let release!: () => void;
+  const seen: string[] = [];
+  const ingest = vi.fn(async () => {
+    const model = settings.embeddingModel;
+    seen.push(model);
+    if (seen.length === 1) await new Promise<void>(resolve => { release = resolve; });
+    expect(settings.embeddingModel).toBe(model);
+    expect(settings.collection).toBe(model === 'other-model' ? 'other_collection' : original.collection);
+  });
+  const service = createIngestionService(db, '/tmp', ingest, vi.fn(), { worker: true });
+  resources.push(() => { service.stop(); sqlite.close(); });
+  service.enqueue('switch.pdf');
+  await vi.waitFor(() => expect(seen).toHaveLength(1));
+  saveSelectedEmbedder(db, 'other');
+  release(); await service.waitUntilIdle();
+  expect(seen).toEqual([original.embeddingModel, 'other-model']);
+  expect(db.select().from(documentIngestionsTable).get()?.status).toBe('completed');
+});
+afterEach(() => { for (const cleanup of resources.splice(0)) cleanup(); vi.unstubAllEnvs(); });
 it('independent workers cannot claim the same live job, but can reclaim an expired lease', async () => {
   const { db, sqlite } = createTestDb(); migrateDatabase(db);
   db.insert(documentsTable).values({ filename: 'test.pdf', titulo: 'Test', esfera: 'federal', tipo: 'legislacao', ano: 2024, orgao: 'Test' }).run();
@@ -23,4 +48,19 @@ it('independent workers cannot claim the same live job, but can reclaim an expir
   expect(secondIngest).toHaveBeenCalledTimes(1);
   release(); await first.waitUntilIdle();
   expect(db.select().from(documentIngestionsTable).get()?.status).toBe('completed');
+});
+
+it('apresenta o diagnóstico seguro de embeddings e mantém o cadastro quando a ingestão falha', async () => {
+  const { EmbeddingError } = await import('../../src/config/embeddingError.js');
+  const { db, sqlite } = createTestDb();
+  db.insert(documentsTable).values({ filename: 'failed.pdf', titulo: 'Test', esfera: 'federal', tipo: 'legislacao', ano: 2024, orgao: 'Test' }).run();
+  const ingest = vi.fn().mockRejectedValue(new EmbeddingError(Object.assign(new Error('do embedding request: EOF private body'), { status_code: 500 })));
+  const service = createIngestionService(db, '/tmp', ingest, vi.fn(), { worker: true });
+  resources.push(() => { service.stop(); sqlite.close(); });
+  service.enqueue('failed.pdf'); await service.waitUntilIdle();
+  const state = db.select().from(documentIngestionsTable).get();
+  expect(state?.status).toBe('failed');
+  expect(state?.error).toContain('memória do Docker');
+  expect(state?.error).not.toContain('private body');
+  expect(db.select().from(documentsTable).all()).toHaveLength(1);
 });

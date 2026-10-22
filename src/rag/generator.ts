@@ -25,7 +25,7 @@ export interface ChatMessage {
 export async function askRAG(
   history: ChatMessage[],
   onChunk?: (chunk: string) => void,
-  options: { evidence?: SearchResult[]; signal?: AbortSignal; search?: SearchOptions } = {}
+  options: { evidence?: SearchResult[]; signal?: AbortSignal; search?: SearchOptions; maxResponseTokens?: number } = {}
 ) {
   const lastUserMessage = history.filter(h => h.role === 'user').pop();
   if (!lastUserMessage) {
@@ -78,7 +78,7 @@ export async function askRAG(
     model: settings.llmModel,
     messages: messagesForLlm,
     temperature: 0.1,
-    max_tokens: settings.maxResponseTokens,
+    max_tokens: options.maxResponseTokens ?? settings.maxResponseTokens,
     stream: true,
   }, { signal: options.signal });
 

@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   collectionExists: vi.fn(), embedding: vi.fn(), parse: vi.fn(), chunks: vi.fn(),
 }));
 vi.mock('../../src/config/qdrant.js', () => ({
-  qdrantClient: mocks, setupQdrantCollection: mocks.setup, COLLECTION_NAME: 'test',
+  qdrantClient: mocks, setupQdrantCollection: mocks.setup, getCollectionName: () => 'test', COLLECTION_NAME: 'test',
 }));
 vi.mock('../../src/config/ollama.js', () => ({ generateEmbedding: mocks.embedding }));
 vi.mock('pdf-parse-new', () => ({ default: mocks.parse }));

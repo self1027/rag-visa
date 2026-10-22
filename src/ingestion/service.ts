@@ -1,3 +1,4 @@
+import { EmbeddingError } from '../config/embeddingError.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -5,7 +6,8 @@ import { and, eq, or, lte, isNull, sql } from 'drizzle-orm';
 import type { db } from '../db/index.js';
 import { documentIngestionsTable as jobs, documentsTable } from '../db/schema.js';
 import { ingestDocument, removeDocumentVectors, type DocumentMetadata, type ProgressCallback } from './document.js';
-import { settings } from '../config/settings.js';
+import { settings, withEmbeddingConfig } from '../config/settings.js';
+import { getSelectedEmbedder, getEmbeddingProfiles } from '../config/embeddingProfiles.js';
 import { log } from '../observability/index.js';
 export interface IngestionState {
   status: 'pending' | 'queued' | 'processing' | 'completed' | 'failed' | 'deleting'; phase: string;
@@ -61,20 +63,25 @@ export function createIngestionService(database: typeof db, pdfDir: string, inge
           database.delete(jobs).where(eq(jobs.filename, job.filename)).run(); continue;
         }
         const started = performance.now();
+        const embedder = getSelectedEmbedder(database);
         const heartbeat = setInterval(() => {
           try { update(job.filename, {}); } catch { /* callback fencing prevents publishing after ownership loss */ }
         }, Math.max(20, Math.floor(leaseMs / 3)));
         heartbeat.unref();
         try {
           const report: ProgressCallback = progress => update(job.filename, progress);
-          await ingest(document, pdfDir, report, job.legacySource);
+          await withEmbeddingConfig(embedder, () => ingest(document, pdfDir, report, job.legacySource));
           update(job.filename, { status: 'completed', phase: 'completed', progress: 100, error: null, owner: null, leaseUntil: null });
           log('ingestion_completed', { filename: job.filename, durationMs: Math.round(performance.now() - started) });
         } catch (error) {
           log('ingestion_failed', { filename: job.filename, durationMs: Math.round(performance.now() - started), errorType: error instanceof Error ? error.name : 'unknown' });
           if (state(job.filename)?.owner === owner) update(job.filename, { status: 'failed', phase: 'failed', owner: null, leaseUntil: null,
-            error: 'Não foi possível ingerir o PDF. Verifique o arquivo e os serviços de indexação e tente novamente.' });
-        } finally { clearInterval(heartbeat); }
+            error: error instanceof EmbeddingError ? error.message : 'Não foi possível ingerir o PDF. Verifique o arquivo e os serviços de indexação e tente novamente.' });
+        } finally {
+          clearInterval(heartbeat);
+          // A selection change cannot redirect a running job into another model's collection.
+          if (getSelectedEmbedder(database).id !== embedder.id) service.enqueue(job.filename);
+        }
       }
     } finally { running = false; for (const resolve of waiters.splice(0)) resolve(); }
   }
@@ -106,7 +113,11 @@ export function createIngestionService(database: typeof db, pdfDir: string, inge
         try { update(document.filename, {}); } catch { /* ownership is checked before completing */ }
       }, Math.max(20, Math.floor(leaseMs / 3)));
       heartbeat.unref();
-      try { await removeVectors(document, previous?.legacySource); }
+      try {
+        for (const profile of getEmbeddingProfiles()) {
+          await withEmbeddingConfig(profile, () => removeVectors(document, previous?.legacySource));
+        }
+      }
       catch (error) {
         database.update(jobs).set({ status: previous?.status || 'pending', owner: null, leaseUntil: null })
           .where(and(eq(jobs.filename, document.filename), eq(jobs.owner, owner))).run();

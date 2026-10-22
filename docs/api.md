@@ -2,12 +2,16 @@
 
 URL local padrão: `http://localhost:3333`. Erros HTTP usam `{ "error": "mensagem" }`. Para nomes de arquivo no caminho, use `encodeURIComponent(filename)`.
 
-O acesso é aberto quando `ADMIN_API_TOKEN` está vazio. Se configurado, envie `Authorization: Bearer <token>` nas operações de escrita, reingestão e métricas. Listagem, leitura de PDFs e chat continuam públicos. CORS permite qualquer origem quando `CORS_ORIGINS` está vazio.
+O acesso é aberto quando `ADMIN_API_TOKEN` está vazio. Se configurado, envie `Authorization: Bearer <token>` nas operações de escrita, reingestão, métricas e leitura das configurações. Listagem, leitura de PDFs e chat continuam públicos. CORS permite qualquer origem quando `CORS_ORIGINS` está vazio.
 
 ## Rotas
 
 | Método | Rota | Resultado de sucesso |
 | --- | --- | --- |
+| GET | `/api/settings` | `200`, parâmetros atuais, modelos e limites aceitos |
+| PUT | `/api/settings` | `200`, parâmetros salvos no SQLite |
+| GET | `/api/embedders` | `200`, modelo selecionado e opções configuradas |
+| PUT | `/api/embedders` | `200`, escolha persistida e PDFs enfileirados para reindexação |
 | GET | `/api/documents` | `200`, documentos e estados de ingestão |
 | GET | `/api/documents/:filename` | `200`, PDF servido inline |
 | POST | `/api/documents` | `201`, cadastro e ingestão enfileirada |
@@ -18,6 +22,28 @@ O acesso é aberto quando `ADMIN_API_TOKEN` está vazio. Se configurado, envie `
 | GET | `/api/health` | `200`, `{ "status": "ok" }` |
 | GET | `/api/ready` | `200` quando pronto; `503` quando indisponível |
 | GET | `/api/metrics` | `200`, métricas HTTP e contagem de jobs |
+
+## Configuração da recuperação e da resposta
+
+O seletor **Modelo de embeddings** usa `GET /api/embedders`, que retorna `selectedId` e `profiles` com `id`, `label`, `model`, `provider`, `dimensions` e `contextTokens`. Não retorna URLs, caminhos ou credenciais. Para trocar, envie `PUT /api/embedders` com apenas `{ "id": "bertimbau" }`. As duas rotas seguem `ADMIN_API_TOKEN`.
+
+A troca testa a geração no modelo de destino, prepara sua coleção, salva a escolha no SQLite e enfileira os documentos. Retorna também `changed`; escolher o modelo já ativo não inicia nova reindexação. IDs desconhecidos, campos extras e modelos indisponíveis retornam `400` sem alterar a seleção. Exclusão em andamento retorna `409`. Cada requisição e tarefa usa um snapshot do modelo e da coleção; tarefas iniciadas no modelo anterior terminam nele e voltam à fila para o modelo selecionado. `GET /api/documents` inclui `embedderId` para sincronizar outras páginas abertas.
+
+`GET /api/ready` retorna `status`, `qdrant`, `embeddings` e `embeddingProvider`. Para `ollama`, mantém também o campo `ollama`. Para `sentence-transformers`, a prontidão exige modelo, dimensão, contexto e revisão compatíveis no serviço Python. Prontidão não garante que todos os documentos estejam indexados na coleção configurada.
+
+A página estática em `/` consulta e altera esses parâmetros via `fetch`. Não utiliza EJS e pode ser hospedada separadamente: configure a origem da API em “Conectar à API” e permita a origem da página em `CORS_ORIGINS`, quando restrito. A origem fica no navegador; o token administrativo permanece apenas na memória da página e precisa ser informado novamente ao recarregar.
+
+`GET /api/settings` retorna `searchLimit`, `searchThreshold`, `maxResponseTokens`, `model`, `embeddingModel`, `uploadMaxBytes` e `limits`. Nenhuma credencial ou endpoint de inferência é retornado. Quando `ADMIN_API_TOKEN` está configurado, GET e PUT exigem Bearer.
+
+Envie os três parâmetros numéricos com `PUT /api/settings`:
+
+```json
+{ "searchLimit": 6, "searchThreshold": 0.3, "maxResponseTokens": 1000 }
+```
+
+`searchLimit` aceita inteiros de 1 a 50; `searchThreshold` aceita valores de 0 a 1; `maxResponseTokens` aceita inteiros de 1 a 32000. Campos adicionais, ausentes ou tipos inválidos retornam `400`. O máximo de tokens ainda precisa ser compatível com o modelo escolhido no servidor.
+
+Os ajustes persistem na tabela `rag_settings` do SQLite e valem para as próximas perguntas, inclusive em outras instâncias que compartilhem o banco. Sem um registro salvo, usam-se os padrões do ambiente. Os valores persistidos têm precedência sobre esses três padrões até serem alterados novamente pela API. Modelos, endpoints e credenciais continuam configurados no servidor. A relevância mínima mede similaridade vetorial, não a confiança jurídica da resposta.
 
 ## Cadastro e atualização
 

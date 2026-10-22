@@ -15,7 +15,12 @@ Copie [`.env.example`](../.env.example) para `.env` e configure o endpoint, a ch
 | `QDRANT_URL` | `http://localhost:6333` | Endpoint do Qdrant |
 | `QDRANT_COLLECTION` | `legislacao_visa` | Coleção vetorial |
 | `OLLAMA_URL` | `http://localhost:11434` | Endpoint do Ollama |
-| `EMBEDDING_MODEL` | Obrigatória para embeddings | Modelo instalado no Ollama; o exemplo usa `bge-m3` |
+| `EMBEDDING_PROVIDER` | `ollama` | `ollama` ou `sentence-transformers`; o exemplo seleciona o serviço Python |
+| `EMBEDDING_URL` | `http://localhost:8001` | Endpoint do serviço Python; Compose usa `EMBEDDING_DOCKER_URL` internamente |
+| `EMBEDDING_MODEL` | Obrigatória para embeddings | Identidade do modelo servido; o exemplo usa `tardellirs/embeddinggemma-pt-br` |
+| `EMBEDDING_REVISION` | Vazio | Revisão esperada no healthcheck Python e na versão de ingestão |
+| `EMBEDDING_QUERY_PREFIX`, `EMBEDDING_DOCUMENT_PREFIX` | Vazios | Prefixos aplicados a consultas e documentos; preserve o espaço final com aspas no `.env` |
+| `EMBEDDING_MODEL_PATH` | `./data/models/embeddinggemma-pt-br` no Compose | Pasta local montada como `/models`, somente leitura, no serviço Python |
 | `EMBEDDING_CONTEXT_TOKENS` | `8192` | Contexto do modelo de embeddings |
 | `INGESTION_BATCH_SIZE` | `25` | Quantidade de vetores por lote |
 | `CHUNK_MAX_LENGTH` | `2500` | Limite de caracteres por trecho, incluindo cabeçalho |
@@ -50,3 +55,13 @@ No Compose da aplicação, os caminhos usam `/app/data`. `PORT` controla também
 Migração: ambientes antigos precisam declarar `LLM_BASE_URL` (ou `GROQ_BASE_URL`) e `EMBEDDING_MODEL`. O exemplo Groq está em `.env.example`; nenhum endpoint Groq é escolhido pelo código. Normalização e geração compartilham um único cliente. A API e a ingestão podem iniciar sem credencial de chat; ela é exigida ao usar a IA.
 
 A versão de ingestão inclui modelo, dimensão, contexto e parâmetros do chunker. Alterá-los invalida o reaproveitamento da versão anterior na próxima ingestão. Para trocar o modelo de embeddings, use uma coleção nova e reingira todos os documentos antes das consultas.
+
+O perfil EmbeddingGemma do exemplo declara explicitamente contexto `2048`, dimensão `768`, revisão e prefixos de recuperação. Consulte [Modelos locais](local-models.md) para subir o serviço, obter os pesos, reindexar e retornar ao Ollama. `COMPOSE_PROFILES=embeddinggemma` habilita o container Python. Provedor, revisão e prefixos também participam da versão de ingestão.
+
+## Ajustes pela interface
+
+O seletor de embeddings permite escolher entre os perfis definidos no ambiente, salva a escolha no SQLite e enfileira a reindexação automaticamente. Não é necessário editar `.env` a cada troca. Consulte [Modelos locais](local-models.md#escolher-pela-interface) para os contratos de `EMBEDDING_PROFILES`, `EMBEDDING_DOCKER_PROFILES`, `EMBEDDING_MODELS`, `EMBEDDING_LABEL` e `BERTIMBAU_MODEL_PATH`. Alterações nesses catálogos exigem reinício; a seleção salva deve continuar presente no catálogo.
+
+Acesse `/` na origem da API para cadastrar, consultar, remover e reprocessar PDFs. A tela segue a paleta, fonte Inter local, menu lateral e superfícies do [Livro](https://github.com/self1027/Livro), usando HTML/CSS/JavaScript sem dependências de frontend. A fonte acompanha sua licença em `public/fonts/LICENSE.txt`.
+
+Quantidade de trechos, relevância mínima e limite da resposta podem ser salvos por `PUT /api/settings` e passam a valer para novas perguntas sem reiniciar. A persistência ocorre no mesmo SQLite; os padrões `SEARCH_LIMIT`, `SEARCH_SCORE_THRESHOLD` e `MAX_RESPONSE_TOKENS` são usados antes do primeiro salvamento. Mudanças nessas três variáveis não substituem configurações já salvas. Consulte o [contrato da API](api.md#configuração-da-recuperação-e-da-resposta).

@@ -22,6 +22,8 @@ coverage/
 # Logs, caches and local editor/OS files
 *.log
 .cache/
+__pycache__/
+*.pyc
 .tmp/
 .vscode/
 .idea/

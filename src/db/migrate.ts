@@ -4,6 +4,11 @@ import type { db } from './index.js';
 export function migrateDatabase(database: typeof db) {
   database.transaction(tx => {
   const database = tx;
+  database.run('CREATE TABLE IF NOT EXISTS embedding_selection (id INTEGER PRIMARY KEY CHECK (id = 1), profile_id TEXT NOT NULL)');
+  database.run(`CREATE TABLE IF NOT EXISTS rag_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1), search_limit INTEGER NOT NULL,
+    search_threshold REAL NOT NULL, max_response_tokens INTEGER NOT NULL
+  )`);
   database.run(`CREATE TABLE IF NOT EXISTS documents (
     filename TEXT PRIMARY KEY, titulo TEXT NOT NULL, esfera TEXT NOT NULL,
     tipo TEXT NOT NULL, ano INTEGER NOT NULL, orgao TEXT NOT NULL

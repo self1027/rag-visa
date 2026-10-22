@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
 
 export const documentsTable = sqliteTable('documents', {
   filename: text('filename').primaryKey(),
@@ -26,4 +26,16 @@ export const documentIngestionsTable = sqliteTable('document_ingestions', {
   legacySource: text('legacy_source'),
   owner: text('owner'),
   leaseUntil: integer('lease_until'),
+});
+
+export const ragSettingsTable = sqliteTable('rag_settings', {
+  id: integer('id').primaryKey(),
+  searchLimit: integer('search_limit').notNull(),
+  searchThreshold: real('search_threshold').notNull(),
+  maxResponseTokens: integer('max_response_tokens').notNull(),
+});
+
+export const embeddingSelectionTable = sqliteTable('embedding_selection', {
+  id: integer('id').primaryKey(),
+  profileId: text('profile_id').notNull(),
 });

@@ -14,6 +14,14 @@ process.env.GROQ_API_KEY = 'test-groq-api-key';
 process.env.LLM_BASE_URL = 'https://llm.test/v1';
 process.env.LLM_MODEL = 'qwen/qwen3.8-27b';
 process.env.EMBEDDING_MODEL = 'bge-m3';
+process.env.EMBEDDING_PROVIDER = 'ollama';
+process.env.EMBEDDING_PROFILES = '[]';
+process.env.EMBEDDING_DIMENSIONS = '1024';
+process.env.EMBEDDING_CONTEXT_TOKENS = '8192';
+process.env.EMBEDDING_REVISION = '';
+process.env.EMBEDDING_QUERY_PREFIX = '';
+process.env.EMBEDDING_DOCUMENT_PREFIX = '';
+process.env.QDRANT_COLLECTION = 'legislacao_visa';
 process.env.OLLAMA_URL = 'http://localhost:11434';
 process.env.PORT = '3333';
 

@@ -1,6 +1,6 @@
 import { it, expect, vi, beforeEach } from 'vitest';
 const mocks = vi.hoisted(() => ({ query: vi.fn(), embedding: vi.fn() }));
-vi.mock('../../src/config/qdrant.js', () => ({ qdrantClient: mocks, COLLECTION_NAME: 'test' }));
+vi.mock('../../src/config/qdrant.js', () => ({ qdrantClient: mocks, getCollectionName: () => 'test', COLLECTION_NAME: 'test' }));
 vi.mock('../../src/config/ollama.js', () => ({ generateEmbedding: mocks.embedding }));
 import { searchLegislacao } from '../../src/retriever/search.js';
 const point = (id = '1', extra = {}) => ({ id, score: 0.9, payload: { content: 'Artigo legal', artigo: 'Art. 1º', esfera: 'federal', fonte_pdf: 'Lei teste', ...extra } });
@@ -15,6 +15,7 @@ it('respects explicit sphere and article without a municipal override', async ()
 });
 it('excludes unpublished and revoked points and uses configured limits', async () => {
   await searchLegislacao('query', { limit: 3, scoreThreshold: 0.5 });
+  expect(mocks.embedding).toHaveBeenCalledWith('query', undefined, 'query');
   expect(mocks.query.mock.calls[0][1]).toMatchObject({ limit: 3, score_threshold: 0.5, filter: { must_not: [
     { key: 'indexed', match: { value: false } }, { key: 'vigencia', match: { value: 'revogada' } },
   ] } });

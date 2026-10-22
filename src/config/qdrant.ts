@@ -8,8 +8,10 @@ export const qdrantClient = new QdrantClient({
 });
 
 export const COLLECTION_NAME = settings.collection;
+export function getCollectionName() { return settings.collection; }
 
 export async function setupQdrantCollection() {
+  const COLLECTION_NAME = getCollectionName();
   try {
     const collections = await qdrantClient.getCollections();
     const exists = collections.collections.some(

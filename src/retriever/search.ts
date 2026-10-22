@@ -1,4 +1,4 @@
-import { qdrantClient, COLLECTION_NAME } from '../config/qdrant.js';
+import { qdrantClient, getCollectionName } from '../config/qdrant.js';
 import { generateEmbedding } from '../config/ollama.js';
 import { settings } from '../config/settings.js';
 export interface SearchOptions {
@@ -13,9 +13,10 @@ export interface SearchResult {
   jurisdicao?: string | null; urlOficial?: string | null; vigencia?: string; versao?: string | null;
 }
 export async function searchLegislacao(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+  const COLLECTION_NAME = getCollectionName();
   const { limit = settings.searchLimit, scoreThreshold = settings.searchThreshold, esfera, artigo, jurisdicao } = options;
   options.signal?.throwIfAborted();
-  const vector = await generateEmbedding(query, options.signal);
+  const vector = await generateEmbedding(query, options.signal, 'query');
   const must: any[] = [];
   if (artigo) must.push({ key: 'artigo', match: { value: artigo } });
   if (esfera) must.push({ key: 'esfera', match: { value: esfera } });

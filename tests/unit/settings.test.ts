@@ -29,6 +29,7 @@ describe('configuração por ambiente', () => {
     { PORT: '65536' }, { SEARCH_LIMIT: '1.5' }, { INGESTION_BATCH_SIZE: '0' },
     { SEARCH_SCORE_THRESHOLD: '1.01' }, { CHUNK_MAX_LENGTH: '100', CHUNK_OVERLAP: '99' },
     { QDRANT_URL: 'arquivo-local' }, { LLM_BASE_URL: 'file:///tmp/modelo' },
+    { EMBEDDING_PROVIDER: 'invalid' }, { EMBEDDING_URL: 'file:///tmp/modelo' },
   ])('rejeita configuração inválida: %j', env => {
     expect(() => readSettings(env)).toThrow();
   });

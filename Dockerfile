@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY src ./src
+COPY public ./public
 COPY tsconfig.json ./
 RUN mkdir -p data/pdfs && chown -R node:node /app/data
 USER node

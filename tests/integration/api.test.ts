@@ -77,7 +77,7 @@ describe('HTTP API Integration Tests', () => {
       const res = await request(emptyApp).get('/api/documents');
       
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ total: 0, documents: [] });
+      expect(res.body).toEqual({ total: 0, documents: [], embedderId: 'default' });
       
       emptyDb.sqlite.close();
     });

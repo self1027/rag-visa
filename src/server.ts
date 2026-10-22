@@ -1,4 +1,9 @@
-import { settings } from './config/settings.js';
+import { fileURLToPath } from 'node:url';
+import { getRagSettings, saveRagSettings, ragSettingLimits } from './rag/settings.js';
+import { settings, withEmbeddingConfig } from './config/settings.js';
+import { getEmbeddingProfiles, getSelectedEmbedder, saveSelectedEmbedder, publicEmbedders } from './config/embeddingProfiles.js';
+import { checkEmbeddingReady } from './config/ollama.js';
+import { setupQdrantCollection } from './config/qdrant.js';
 import { adminAuth } from './middleware/adminAuth.js';
 import { observe, metrics } from './observability/index.js';
 import { loadConversation, saveConversation, refreshEvidence } from './rag/conversations.js';
@@ -31,6 +36,7 @@ export function createApp(customDb?: typeof db, customPdfDir?: string, customCha
   const rateLimiter = customChatLimiter || chatLimiter;
 
   migrateDatabase(database);
+  app.use((_req, _res, next) => withEmbeddingConfig(getSelectedEmbedder(database), next));
   const ingestion = customIngestion || createIngestionService(database, pdfDir);
   if (!customIngestion) ingestion.resume();
   const ingestionState = (filename: string) => listIngestionStates(database).get(filename) || { ...pendingIngestion };
@@ -100,6 +106,57 @@ export function createApp(customDb?: typeof db, customPdfDir?: string, customCha
 
   app.use(express.json());
 
+  app.use(express.static(fileURLToPath(new URL('../public/', import.meta.url))));
+
+  app.get('/api/settings', adminAuth, (_req, res) => {
+    res.json({ ...getRagSettings(database), limits: ragSettingLimits,
+      model: settings.llmModel, embeddingModel: settings.embeddingModel, uploadMaxBytes: settings.uploadMaxBytes });
+  });
+  app.put('/api/settings', adminAuth, (req, res, next) => {
+    // Validate before writing; database failures remain HTTP 500 errors.
+    try {
+      const config = saveRagSettings(database, req.body);
+      res.json(config);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/embedders', adminAuth, (_req, res) => res.json(publicEmbedders(database)));
+  app.put('/api/embedders', adminAuth, async (req, res, next) => {
+    try {
+      if (!req.body || typeof req.body.id !== 'string' || Object.keys(req.body).length !== 1) {
+        throw Object.assign(new Error('Selecione um embedder configurado.'), { status: 400 });
+      }
+      const profile = getEmbeddingProfiles().find(profile => profile.id === req.body.id);
+      if (!profile) throw Object.assign(new Error('Embedder não permitido.'), { status: 400 });
+      if (getSelectedEmbedder(database).id === profile.id) return res.json({ ...publicEmbedders(database), changed: false });
+      try {
+        await withEmbeddingConfig(profile, async () => {
+          await checkEmbeddingReady();
+          const { generateEmbedding } = await import('./config/ollama.js');
+          const vector = await generateEmbedding('Verificação do modelo de embeddings.');
+          if (vector.length !== profile.embeddingDimensions || vector.some(value => !Number.isFinite(value))) throw new Error('Invalid embedding dimensions');
+          await setupQdrantCollection();
+        });
+      } catch {
+        throw Object.assign(new Error('O embedder selecionado não está disponível. Confira o serviço e os recursos de memória antes de tentar novamente.'), { status: 400 });
+      }
+      database.transaction(() => {
+        if ([...listIngestionStates(database).values()].some(job => job.status === 'deleting')) {
+          throw Object.assign(new Error('Aguarde a exclusão em andamento antes de trocar o embedder.'), { status: 409 });
+        }
+        saveSelectedEmbedder(database, profile.id);
+        for (const document of database.select().from(documentsTable).all()) ingestion.enqueue(document.filename);
+      }, { behavior: 'immediate' });
+      ingestion.resume();
+      res.json({ ...publicEmbedders(database), changed: true });
+    } catch (error) {
+      if ((error as { status?: number }).status === 409) return res.status(409).json({ error: (error as Error).message });
+      next(error);
+    }
+  });
+
   interface ChatRequestBody {
     history: ChatMessage[];
     conversationId?: string;
@@ -114,6 +171,7 @@ export function createApp(customDb?: typeof db, customPdfDir?: string, customCha
 
       const states = listIngestionStates(database);
       return res.json({
+        embedderId: getSelectedEmbedder(database).id,
         total: documents.length,
         documents: documents.map(document => ({ ...document, ingestion: states.get(document.filename) || { ...pendingIngestion } }))
       });
@@ -351,10 +409,11 @@ export function createApp(customDb?: typeof db, customPdfDir?: string, customCha
     res.setHeader('X-Conversation-Id', conversation.id);
     try {
       const evidence = await refreshEvidence(conversation.evidence);
+      const ragSettings = getRagSettings(database);
       const result = await askRAG(sanitizedHistory, chunk => {
         controller.signal.throwIfAborted();
         if (!res.destroyed) res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`);
-      }, { evidence, signal: controller.signal, search: { jurisdicao: req.body.jurisdicao, esfera: req.body.esfera, preferMunicipal: req.body.preferMunicipal } });
+      }, { evidence, signal: controller.signal, maxResponseTokens: ragSettings.maxResponseTokens, search: { limit: ragSettings.searchLimit, scoreThreshold: ragSettings.searchThreshold, jurisdicao: req.body.jurisdicao, esfera: req.body.esfera, preferMunicipal: req.body.preferMunicipal } });
       controller.signal.throwIfAborted();
       saveConversation(database, conversation.id, result.evidence || evidence);
       res.write(`data: ${JSON.stringify({ type: 'sources', sources: result.sources, normalizedQuery: result.normalizedQuery, conversationId: conversation.id })}\n\n`);
@@ -383,15 +442,13 @@ export function createApp(customDb?: typeof db, customPdfDir?: string, customCha
   app.get('/api/ready', async (_req, res) => {
     const checks = await Promise.allSettled([
       fetch(`${settings.qdrantUrl}/healthz`, { signal: AbortSignal.timeout(3000) }).then(response => { if (!response.ok) throw new Error(); }),
-      fetch(`${settings.ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(3000) }).then(async response => {
-        if (!response.ok) throw new Error();
-        const tags = await response.json() as { models: Array<{ name: string }> };
-        if (!tags.models.some(model => model.name.split(':')[0] === settings.embeddingModel.split(':')[0])) throw new Error();
-      }),
+      checkEmbeddingReady(),
     ]);
     const ready = checks.every(check => check.status === 'fulfilled');
     res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'unavailable',
-      qdrant: checks[0].status === 'fulfilled', ollama: checks[1].status === 'fulfilled' });
+      qdrant: checks[0].status === 'fulfilled', embeddings: checks[1].status === 'fulfilled',
+      embeddingProvider: settings.embeddingProvider,
+      ...(settings.embeddingProvider === 'ollama' ? { ollama: checks[1].status === 'fulfilled' } : {}) });
   });
 
   // Error handling middleware (registered after the routes).
