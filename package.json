@@ -33,7 +33,7 @@
     "dotenv": "^18.0.3",
     "drizzle-orm": "^0.45.3",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.7.0",
+    "express-rate-limit": "^8.7.1",
     "multer": "^2.4.0",
     "ollama": "^0.6.3",
     "openai": "^7.23.0",
