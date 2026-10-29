@@ -1,2 +1,2 @@
 # Ferramenta de desenvolvimento; não faz parte do runtime da API.
-graphifyy[watch]>=0.9.93,<0.10
+graphifyy[watch]>=0.9.96,<0.10
